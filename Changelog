@@ -1,6 +1,11 @@
 GKrellKam Changelog
 -------------------
 
+2.0.0 - Oct 23, 2002
+  * Ported to GKrellM2 / Gtk+-2.0 by Bill Wilson.
+  * I'm following the example of other plugin authors and bumping
+    the version major number to 2 for the gkrellm2 port.
+
 0.3.4 - Mar 19, 2002
   * Remove --proxy=off from wget options.
 
