@@ -1,0 +1,23 @@
+GKrellKam Changelog
+-------------------
+
+0.1.1b
+  * Consolidated scripts into one more useful script, krellkam_load.
+    Can cycle through a list of URLs along with filenames or select
+    from the list at random. Changed default script in gkrellkam.c.
+  * Expanded tabs in source for readability, remembering that not
+    everyone uses 2-character tab stops like me
+
+0.1.1
+  * Fixed bug making it impossible to switch image viewer from xv
+  * Temporary image filenames returned by scripts should now be able to
+    contain spaces
+  * Removed debug_print functions, because they were confusing to older
+    versions of gcc and weren't needed by the end users
+
+0.1.0
+  * Released GKrellKam on the unsuspecting world. Well, just the world of
+    computer users. Okay, the world of Linux users who run the latest
+    version of gkrellm and like adding plugins (there are at least 37 of
+    us).
+
