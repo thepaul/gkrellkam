@@ -1,6 +1,16 @@
 GKrellKam Changelog
 -------------------
 
+0.3.0 - Dec 10, 2001
+  * When downloads fail, don't keep retrying continually
+  * Quote urls in wget command to let ampersands, etc work
+  * Use sane /tmp/krellkam* handling with g_atexit
+  * Includes code for an extremely basic image viewer
+  * Add 'refresh' tag to list syntax, to enable cycling
+    an image more than once without redownloading every time
+  * You can now give the URL to an online list in the Image
+    Source box
+
 0.2.5 - Oct 25, 2001
   * Cleans out /tmp/krellkam* files left over from the last
     time gkrellm died (there's no way to delete them at the time)

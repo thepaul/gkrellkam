@@ -1,7 +1,8 @@
 # example.list
 #
-# Included with the GKrellKam 0.2.3 distribution
-# by paul cannon- usage, modification, and copying not restricted
+# Included with the GKrellKam 0.3.0 distribution
+# by paul cannon- permission is granted to use, modify, and
+#                 copy this file for any use
 
 # Notes:
 #
@@ -38,9 +39,12 @@ script: echo "/home/paul/pics/mypic.xpm"
 script: /home/paul/bin/nextimage.pl
 
 # Show a webcam in sunny Hawaii for only 10 seconds (don't want to
-# be distracted from work)
+# be distracted from work). Also, only re-fetch this image from the
+# internet every 10 minutes (600 seconds). If the image cycles up
+# before that time, use the previously downloaded version.
 http://webcam.its.hawaii.edu/uhmwebcam/image01.jpg
 	seconds: 10
+	refresh: 600
 	tooltip: Hey! Keep working!
 
 # Include the contents of another list right here- tooltips and
