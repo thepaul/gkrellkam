@@ -1,10 +1,4 @@
-Notes for GKrellKam version 0.3.1:
+Notes for GKrellKam version 0.3.3:
 
-  Made some changes in the handling of the internal viewer. Added
-  a popup menu, a "save as" option, and allowed resizing. Any number
-  of internal viewer windows should be able to be open. See Changelog
-  for more info
-
-For GKrellKam version 0.3.2:
-
-  Fixed a segfault that can occur with a bad URL.
+  Fixed an error message resulting when using a script or external
+  program to determine the image source.

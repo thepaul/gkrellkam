@@ -41,9 +41,9 @@
 #if (GKRELLM_VERSION_MAJOR > 1) || \
     ((GKRELLM_VERSION_MAJOR == 1) && (GKRELLM_VERSION_MINOR >= 2))
 # define GKRELLM_1_2_0
-# define PLUGIN_VER "0.3.2/s2"
+# define PLUGIN_VER "0.3.3/s2"
 #else
-# define PLUGIN_VER "0.3.2/s1"
+# define PLUGIN_VER "0.3.3/s1"
 #endif
 
 #define PLUGIN_NAME "GKrellKam"
@@ -178,7 +178,7 @@ static gchar *kkam_about_text = _(
   PLUGIN_URL );
 
 static const char *default_source[] = {
-  "http://www.usu.edu/webcam/fullsize.jpg",
+  "http://aggies.usu.edu/webcam/fullsize.jpg",
   "",
   "",
   "",
@@ -836,7 +836,10 @@ static int cmd_results (KKamPanel *p)
   len = fread (&buf[1], sizeof (char), BUFLEN - 2, p->cmd_pipe);
   buf[len + 1] = '\0';
   g_strstrip (buf);
-  
+
+  pclose (p->cmd_pipe);
+  p->cmd_pipe = NULL;
+
   if (ks->type == SOURCE_SCRIPT)
   {
     ks->tfile = g_strdup (buf);
@@ -850,8 +853,6 @@ static int cmd_results (KKamPanel *p)
        not good, since we passed -q. We'll have to wait for it to die */
     
     report_error (p, _("wget said: \"%s\""), buf);
-    pclose (p->cmd_pipe);
-    p->cmd_pipe = NULL;
     return -1;
   }
 }
@@ -999,9 +1000,8 @@ void showsource (KKamSource *s)
 /*
   click_callback ()
 
-  launches eeyes, or whatever viewer the user has configured, to
-  display the unscaled version of the image (looking where
-  we loaded it). If the user right-clicked, get a fresh image.
+  Process user's mouse-clicks on the panels. Open viewers, refresh images,
+  increase/decrease number of panels, etc.
 */
 static gint click_callback (GtkWidget *widget, GdkEventButton *ev, gpointer gw)
 {
