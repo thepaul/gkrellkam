@@ -2,7 +2,7 @@
 #
 # krellkam_load - rotates a list of images and URLs in ~/.krellkam.list
 #
-# VERSION - 0.2.2
+# VERSION - 0.2.3
 #
 # Copyright (C) 2001 paul cannon
 # space software lab/utah state university
@@ -70,7 +70,7 @@ while [ -n "$1" ]; do
   shift
 done
 
-if [ -z $thispic ]; then
+if [ -z "$thispic" ]; then
   # check the list
   test -r $PICS_LIST || die "Can't open listfile $PICS_LIST."
   numpics=`cat $PICS_LIST | wc -l`
@@ -82,18 +82,18 @@ if [ -z $thispic ]; then
     # pick a random line from the file
 
     let num=($RANDOM%numpics)+1
-    thispic=`head -$num $PICS_LIST | tail -1`
+    thispic="`head -$num $PICS_LIST | tail -1`"
   else
     # rotate the list; first line goes to bottom
     TMPLOC=`mktemp /tmp/krellkam.list.XXXXXX`
 
     # remember the first line
-    thispic=`head -1 $PICS_LIST`
+    thispic="`head -1 $PICS_LIST`"
 
     # rotate the list
     let num=numpics-1
     tail -$num $PICS_LIST > $TMPLOC
-    echo $thispic >> $TMPLOC
+    echo "$thispic" >> $TMPLOC
     mv $TMPLOC $PICS_LIST
   fi
 
@@ -101,11 +101,11 @@ if [ -z $thispic ]; then
 fi
 
 # determine if URL or local file
-if echo $thispic | grep "://" > /dev/null; then
+if echo "$thispic" | grep "://" > /dev/null; then
 
   # Load URL. First convert it to a name suitable for a filename..
 
-  FILELOC=$(echo $thispic | sed -e "y/:\/%\!\`*?/--------/")
+  FILELOC=$(echo "$thispic" | sed -e "y/:\/%\!\`*?&=/----------/")
 
   # Make sure a directory is where we want it..
 
@@ -113,13 +113,13 @@ if echo $thispic | grep "://" > /dev/null; then
 
   # download.
 
-  FILEPATH=$TMPFILEDIR/$FILELOC
-  $WGET -O $FILEPATH $thispic
-  echo $FILEPATH
+  FILEPATH="$TMPFILEDIR/$FILELOC"
+  $WGET $WGET_OPTS -O "$FILEPATH" "$thispic"
+  echo "$FILEPATH"
 
 else
 
   # Local image file..
-  echo $thispic
+  echo "$thispic"
 
 fi

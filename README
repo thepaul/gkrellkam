@@ -46,4 +46,7 @@ more rewriting than I thought it would! Regardless, the capability is now
 there and hopefully bug-free. Bug reports, if you find anything wrong, will
 be quite helpful.
 
+Thanks to Benjamin Johnson (benj@visi.com) for some of the image scaling
+code.
+
 See http://gkrellkam.sourceforge.net/ for more info.

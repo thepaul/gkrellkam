@@ -5,6 +5,6 @@ Planned updates-
 - more interesting scripts
 - panel config boxes to accept URLs, filenames of lists and pictures
     as well as the scripts now present
-- before an image is loaded, put a theme-compliant background in the
-    panel instead of a blank box
+- add internal capabilities of GKrellKam accessible via a special
+    command from the script (like a moon clock, etc)
 

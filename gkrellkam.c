@@ -25,7 +25,7 @@
 #include <errno.h>
 
 #define PLUGIN_NAME "GKrellKam"
-#define PLUGIN_VER "0.2.0"
+#define PLUGIN_VER "0.2.1"
 #define PLUGIN_DESC "GKrellM Image Watcher plugin"
 #define PLUGIN_URL "http://gkrellkam.sourceforge.net/"
 #define PLUGIN_STYLE PLUGIN_NAME
@@ -83,6 +83,15 @@ static gchar *kkam_info_text[] =
 "You can adjust this for each panel to give your pictures a\n",
 "nice-looking aspect.\n\n",
 
+"<i>Border size\n",
+"Adds a border space around the image to match better with\n",
+"your GKrellM theme.\n\n",
+
+"<i>Maintain aspect ratio\n",
+"When checked, images are not sized to fit perfectly in this\n",
+"panel. They maintain their aspect, and theme background is\n",
+"shown on either the sides or the top and bottom.\n\n",
+
 "<i>Script to execute for image update\n",
 "This is what the panel will run to get a new image. If the box\n",
 "is empty, the panel will remain empty as well. If you don't\n",
@@ -129,16 +138,20 @@ typedef struct
   char *upd_script;
   int height;
   int period;
+  int boundary;
+  gboolean maintain_aspect;
   gint visible;
   GtkWidget *period_spinner;
+  GtkWidget *boundary_spinner;
   GtkWidget *height_spinner;
+  GtkWidget *aspect_box;
   GtkWidget *scriptbox;
   GdkImlibImage *imlibim;
 } KKamPanel;
 
-int created = 0;
-int numpanels = 0;
-int newnumpanels = 1;
+static int created = 0;
+static int numpanels = 0;
+static int newnumpanels = 1;
 static KKamPanel *panels = NULL;
 
 static Style *img_style = NULL;
@@ -178,20 +191,85 @@ static gboolean activenum (int num)
 /*
   draw_imlibim ()
   
-  renders the current image into the panel at the right size
+  renders the current image into the panel at the right size.
+  aspect-scaling patch from Benjamin Johnson (benj@visi.com)- thanks
 */
 static void draw_imlibim (KKamPanel *p)
 {
+  int pan_x, pan_y;       /* panel x and y sizes */
+  int scale_x, scale_y;   /* size of scaled image */
+  int loc_x, loc_y;       /* location for scaled image */
+
   if (p->imlibim == NULL)
     return;
 
-  gkrellm_render_to_pixmap (p->imlibim, &(p->pixmap), NULL,
-                            gkrellm_chart_width (),
-                            p->height + 1);
+  pan_x = gkrellm_chart_width () - 2 * p->boundary;
+  pan_y = p->height - 2 * p->boundary;
 
+  /* need to blank out the old image here by redrawing the background
+     maybe there is a better way to do this?? */
+  gkrellm_render_to_pixmap (gkrellm_bg_meter_image (style_id),
+                            &(p->pixmap), NULL,
+                            gkrellm_chart_width (), p->height);
   gkrellm_destroy_decal_list (p->panel);
   p->decal = gkrellm_create_decal_pixmap (p->panel, p->pixmap,
                                           NULL, 1, img_style, 0, 0);
+  gkrellm_draw_decal_pixmap (p->panel, p->decal, 0);
+  gkrellm_draw_layers (p->panel);
+
+  if (p->maintain_aspect)
+  {
+    /* determine sizing here - maintain aspect ratio */
+
+    if (pan_x >= p->imlibim->rgb_width && pan_y >= p->imlibim->rgb_height)
+    {
+      /* the image is smaller then the panel. do no sizing, just center. */
+
+      loc_x = (pan_x - p->imlibim->rgb_width) / 2 + p->boundary;
+      loc_y = (pan_y - p->imlibim->rgb_height) / 2 + p->boundary;
+
+      scale_x = 0; /* scale of 0 defaults to use image size */
+      scale_y = 0;
+    }
+    else if ((double)p->imlibim->rgb_width / (double)pan_x >
+             (double)p->imlibim->rgb_height / (double)pan_y)
+    {
+      /* scale to width (image is wider compared to panel size) */
+
+      scale_x = pan_x;
+      scale_y = p->imlibim->rgb_height * pan_x / p->imlibim->rgb_width;
+
+      loc_x = p->boundary;
+      loc_y = (pan_y - scale_y) / 2 + p->boundary;
+    }
+    else
+    {
+      /* scale to height (image is taller compared to panel size) */
+
+      scale_x = p->imlibim->rgb_width * pan_y / p->imlibim->rgb_height;
+      scale_y = pan_y;
+
+      loc_x = (pan_x - scale_x) / 2 + p->boundary;
+      loc_y = p->boundary;
+    }
+  }
+  else
+  {
+    /* Scale to size of panel */
+
+    scale_x = pan_x;
+    scale_y = pan_y;
+
+    loc_x = p->boundary;
+    loc_y = p->boundary;
+  }
+  
+  gkrellm_render_to_pixmap (p->imlibim, &(p->pixmap), NULL,
+                            scale_x, scale_y);
+
+  gkrellm_destroy_decal_list (p->panel);
+  p->decal = gkrellm_create_decal_pixmap (p->panel, p->pixmap,
+                                          NULL, 1, img_style, loc_x, loc_y);
   gkrellm_draw_decal_pixmap (p->panel, p->decal, 0);
   gkrellm_draw_layers (p->panel);
 }
@@ -356,15 +434,28 @@ static gint panel_expose_event (GtkWidget *widget,
   if (!activenum (which))
     return FALSE;
 
-  if (panels[which].pixmap)
-  {
-    gdk_draw_pixmap (widget->window,
-         widget->style->fg_gc[GTK_WIDGET_STATE (widget)],
-         panels[which].pixmap,
-         ev->area.x, ev->area.y, ev->area.x, ev->area.y,
-         ev->area.width, ev->area.height);
-  }
+  gdk_draw_pixmap (widget->window,
+       widget->style->fg_gc[GTK_WIDGET_STATE (widget)],
+       panels[which].panel->pixmap,
+       ev->area.x, ev->area.y, ev->area.x, ev->area.y,
+       ev->area.width, ev->area.height);
+
   return FALSE;
+}
+
+static void cb_boundary_spinner (gpointer s, KKamPanel *p)
+{
+  p->boundary = gtk_spin_button_get_value_as_int
+                                 (GTK_SPIN_BUTTON (p->boundary_spinner));
+  gkrellm_config_modified ();
+  draw_imlibim (p);
+}
+
+static void cb_aspect_box (gpointer s, KKamPanel *p)
+{
+  p->maintain_aspect = GTK_TOGGLE_BUTTON (p->aspect_box)->active;
+  gkrellm_config_modified ();
+  draw_imlibim (p);
 }
 
 static void cb_height_spinner (gpointer s, KKamPanel *p)
@@ -403,14 +494,26 @@ static GtkWidget *create_configpanel_tab (int i)
 
   gkrellm_spin_button (vbox, &panels[i].period_spinner,
                        (gfloat) panels[i].period,
-                       1.0, 500.0, 1.0, 10.0, 0, 60, NULL, NULL,
+                       1.0, 500.0, 1.0, 10.0, 0, 0, NULL, NULL,
                        FALSE, _("Minutes per update"));
 
   gkrellm_spin_button (vbox, &panels[i].height_spinner,
                        (gfloat) panels[i].height,
-                       10.0, 100.0, 1.0, 5.0, 0, 60, cb_height_spinner, &panels[i],
+                       10.0, 100.0, 1.0, 5.0, 0, 0, cb_height_spinner, &panels[i],
                        FALSE, _("Height of viewer, in pixels"));
+
+  gkrellm_spin_button (vbox, &panels[i].boundary_spinner,
+                       (gfloat) panels[i].boundary,
+                       0.0, 20.0, 1.0, 1.0, 0, 0, cb_boundary_spinner, &panels[i],
+                       FALSE, _("Border size"));
   
+  gkrellm_check_button (vbox, &panels[i].aspect_box,
+                        panels[i].maintain_aspect,
+                        TRUE, 0, _("Maintain aspect ratio"));
+  
+  gtk_signal_connect (GTK_OBJECT (panels[i].aspect_box), "toggled",
+                      GTK_SIGNAL_FUNC (cb_aspect_box), &panels[i]);
+
   scripthbox = gtk_hbox_new (FALSE, 0);
   scriptlabel = gtk_label_new (_("Script to execute for image update:  "));
   panels[i].scriptbox = gtk_entry_new ();
@@ -554,8 +657,6 @@ static void kkam_create_plugin (GtkWidget *vbox, gint first_create)
             "button_press_event", (GtkSignalFunc) show_curimage,
             GINT_TO_POINTER (i));
             
-      /* I don't know why this doesn't draw anything-- maybe I need some
-         decal over the default bg_meter_image or something? */
       gkrellm_draw_layers (panels[i].panel);
     }
   }
@@ -585,6 +686,10 @@ static void kkam_save_config (FILE *f)
              PLUGIN_KEYWORD, i + 1, panels[i].height);
     fprintf (f, "%s %d update_period %d\n",
              PLUGIN_KEYWORD, i + 1, panels[i].period);
+    fprintf (f, "%s %d boundary %d\n",
+             PLUGIN_KEYWORD, i + 1, panels[i].boundary);
+    fprintf (f, "%s %d maintain_aspect %d\n",
+             PLUGIN_KEYWORD, i + 1, panels[i].maintain_aspect);
   }
 }
 
@@ -627,6 +732,16 @@ static void kkam_load_config (gchar *arg)
       panels[which].upd_script = g_strstrip (g_strdup (value));
     }
   }
+  else if (!strcmp (config_item, "maintain_aspect"))
+  {
+    if (validnum (which))
+      panels[which].maintain_aspect = (gboolean)CLAMP (atoi (value), 0, 1);
+  }
+  else if (!strcmp (config_item, "boundary"))
+  {
+    if (validnum (which))
+      panels[which].boundary = CLAMP (atoi (value), 0, 20);
+  }
   else if (!strcmp (config_item, "viewer_prog"))
   {
     if (viewer_prog)
@@ -642,7 +757,8 @@ static void kkam_load_config (gchar *arg)
 
 static void cb_numpanel_spinner ()
 {
-  newnumpanels = gtk_spin_button_get_value_as_int (GTK_SPIN_BUTTON (numpanel_spinner));
+  newnumpanels = gtk_spin_button_get_value_as_int
+                                       (GTK_SPIN_BUTTON (numpanel_spinner));
   change_num_panels ();
 }
 
@@ -725,21 +841,24 @@ static void kkam_apply_config ()
   {
     if (panels[i].upd_script)
       g_free (panels[i].upd_script);
-    panels[i].upd_script = gtk_editable_get_chars (
-                              GTK_EDITABLE (panels[i].scriptbox), 0, -1);
-    panels[i].period = gtk_spin_button_get_value_as_int (
-                              GTK_SPIN_BUTTON (panels[i].period_spinner));
+    panels[i].upd_script = gtk_editable_get_chars
+                               (GTK_EDITABLE (panels[i].scriptbox), 0, -1);
+    panels[i].period = gtk_spin_button_get_value_as_int
+                               (GTK_SPIN_BUTTON (panels[i].period_spinner));
+    panels[i].maintain_aspect = GTK_TOGGLE_BUTTON (panels[i].aspect_box)->active;
+    panels[i].boundary = gtk_spin_button_get_value_as_int
+                               (GTK_SPIN_BUTTON (panels[i].boundary_spinner));
   }
 
-  newnumpanels = gtk_spin_button_get_value_as_int (
-                                 GTK_SPIN_BUTTON (numpanel_spinner));
+  newnumpanels = gtk_spin_button_get_value_as_int
+                                 (GTK_SPIN_BUTTON (numpanel_spinner));
   
   change_num_panels ();
 
   if (viewer_prog)
     g_free (viewer_prog);
-  viewer_prog = g_strdup (
-                     gtk_editable_get_chars (GTK_EDITABLE (viewerbox), 0, -1));
+  viewer_prog = g_strdup
+                   (gtk_editable_get_chars (GTK_EDITABLE (viewerbox), 0, -1));
 }
 
 static Monitor kam_mon  =
@@ -776,6 +895,7 @@ Monitor *init_plugin ()
     panels[i].upd_script = g_strdup (default_script[i]);
     panels[i].height = 50;
     panels[i].period = 1;
+    panels[i].boundary = 0;
   }
 
   return &kam_mon;
