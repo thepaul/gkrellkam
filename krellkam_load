@@ -54,7 +54,7 @@ US_END
 $list = $ENV{'HOME'}.'/.krellkam.list';
 $cachedir = $ENV{'HOME'}.'/.gkrellm/data/gkrellkam';
 $wget = 'wget -q';
-$wgetopts = '-q --cache=off --proxy=off';
+$wgetopts = '--cache=off --proxy=off';
 $exec_prog = '';
 $thispic = '';
 $pick_rand = 0;

@@ -1,10 +1,24 @@
-Planned updates-
+Planned or considered updates-
 
-- add shading to image to match a gkrellm or desktop theme
+- put list management capability into module itself- call wget
+  directly, and phase out krellkam_load. This will allow a lot of
+  things I can't currently do easily. List files will be able to be
+  far more sophisticated and include different settings, etc for each
+  panel. Online lists could be used. Tooltip info could be easily
+  specified. The data directory containing the downloaded images
+  could be controlled, and not cluttered up too much.
+
+- add shading to image to match a gkrellm or desktop theme. I don't know
+  how to do this without a *lot* of image processing code. Does anybody
+  want to contribute a patch?
+
 - tooltip info, as optionally supplied by script
-- more interesting scripts
+
 - panel config boxes to accept URLs, filenames of lists and pictures
     as well as the scripts now present
+
 - add internal capabilities of GKrellKam accessible via a special
-    command from the script (like a moon clock, etc)
+    command in the list (like a moon clock, etc)
+
+- add 'browse' button for image source box
 

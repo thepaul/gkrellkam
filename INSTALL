@@ -15,25 +15,22 @@ $ make install
 
 INSTALLING THE SCRIPT
 
-GKrellKam needs to call a script to update the panel image. The default
-script is krellkam_load, which cycles through a list of URLs or filenames,
-and fetches the URLs using wget. To use it, you'll need to put it somewhere
-in your path, or give the whole path to the script in the Configuration tab.
+GKrellKam needs the krellkam_load script, included with this distribution.
+Beginning with this release (0.2.2b), krellkam_load MUST be somewhere in
+your path, or GKrellKam won't work. GNU wget must also be in your path.
+If you are the system administrator, making this plugin available for
+everyone, it is suggested you put krellkam_load in /usr/bin. If you are
+just installing the plugin for your own use, a good place would be in
+your ~/bin directory. If you don't have one, you should make one- it is
+a convenient sort of thing to have. Make sure that ~/bin is in your path!
 
-If you want to use a different script, obviously, you'll need to put that in
-your path or give GKrellKam the full path.
+Even if you want to use a different script to update your images, you
+still need to put krellkam_load in your path. Your script will be called
+by krellkam_load instead of directly by GKrellKam.
 
-The following instructions should suffice to watch a webcam:
-
-mkdir -p ~/bin
-cp krellkam_load ~/bin
-chmod 0744 ~/bin/krellkam_load
-
-then make sure $HOME/bin is in your path. In your home directory,
-make a file called .krellkam.list that contains a URL or filename
-on every line (an example is in krellkam.list.example).
-krellkam_load will cycle through these entries. If you want it to
-pick one at random each time, change the script field in the
-GKrellKam configuration from "krellkam_load" to "krellkam_load -r".
-Type "krellkam_load -h" for more usage instructions.
-
+If you want to rotate through a list of images, you can create one with
+any text editor. Just put one web address or local filename on each
+line. (when using local images, be sure to include the full pathname,
+beginning with /). Then put the full pathname of that list file in the
+Image Source box on the configuration menu. An example is provided in
+the file krellkam.list.example.
