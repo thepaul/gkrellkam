@@ -1,6 +1,14 @@
 GKrellKam Changelog
 -------------------
 
+0.3.1 - Dec 19, 2001
+  * Changed WM_CLASS info for the internal viewer, to let window
+    managers know the difference
+  * Added a popup menu to the internal viewer
+  * Added a Save option and file selector to the internal viewer
+  * Allow internal viewer window to be resized, and resize the
+     image inside (but when saving, save at original size)
+
 0.3.0b - Dec 17, 2001
   * Fixed crash resulting when "Select Images at Random" is
     turned on for a non-list source

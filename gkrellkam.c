@@ -38,16 +38,17 @@
   Determine gkrellm version- if >= 1.2.0, we can add some extra
   features. Yippee!
 */
-#if ((GKRELLM_VERSION_MAJOR == 1) && (GKRELLM_VERSION_MINOR >= 2))
+#if (GKRELLM_VERSION_MAJOR > 1) || \
+    ((GKRELLM_VERSION_MAJOR == 1) && (GKRELLM_VERSION_MINOR >= 2))
 # define GKRELLM_1_2_0
-# define PLUGIN_VER "0.3.0b/s2"
+# define PLUGIN_VER "0.3.1/s2"
 #else
-# define PLUGIN_VER "0.3.0b/s1"
+# define PLUGIN_VER "0.3.1/s1"
 #endif
 
 #define PLUGIN_NAME "GKrellKam"
 #define PLUGIN_DESC "GKrellM Image Watcher plugin"
-#define PLUGIN_URL "http://gkrellkam.sourceforge.net/"
+#define PLUGIN_URL "http://gkrellkam.sf.net/"
 #define PLUGIN_STYLE PLUGIN_NAME
 #define PLUGIN_KEYWORD PLUGIN_NAME
 
@@ -92,7 +93,10 @@ static gchar *kkam_info_text[] =
 "<i>Path to image viewer program\n",
 "When you left-click on a GKrellKam panel, it will start your\n",
 "favorite image viewer and display the original, unsized image.\n",
-"Put the name of the image viewer program in this box.\n\n",
+"Put the name of the image viewer program in this box. To use\n",
+"the included GKrellKam internal viewer, just leave this field\n",
+"blank. Try clicking on the internal viewer window to get the\n",
+"menu.\n\n",
 
 "<i>Popup errors\n",
 "When something goes wrong with an image download or the parsing\n",
@@ -240,6 +244,15 @@ typedef struct
   GList *sources;
 } KKamPanel;
 
+typedef struct
+{
+  GtkWidget *window;
+  GtkWidget *menu;
+  GtkWidget *pmap;
+  GtkWidget *fdialog;
+  GdkImlibImage *image;
+} ViewerInfo;
+
 static Monitor *monitor;
 
 static int created = 0;
@@ -329,14 +342,139 @@ static void report_error (KKamPanel *p, char *fmt, ...)
 }
 
 /*
-  destroy_viewer ()
+  kkam_add_menu_item ()
+
+  Used to add a simple item to a menu more easily
+*/
+static void kkam_add_menu_item (GtkWidget *menu, char *label,
+                                GtkSignalFunc cb, gpointer d)
+{
+  GtkWidget *mi;
+
+  mi = gtk_menu_item_new_with_label (label);
+  gtk_signal_connect_object (GTK_OBJECT (mi), "activate", cb, d);
+  gtk_widget_show (mi);
+  gtk_menu_append (GTK_MENU (menu), mi);
+}
+
+/*
+  kkam_iv_destroy ()
 
   The delete_event callback for the internal viewer
 */
-static gint destroy_viewer (GtkWidget *window, GdkEvent *ev, gpointer n)
+static void kkam_iv_destroy (ViewerInfo *vi)
 {
-  gtk_widget_destroy (window);
+  if (vi->fdialog)
+    gtk_widget_destroy (vi->fdialog);
+  gdk_imlib_destroy_image (vi->image);
+  gtk_widget_destroy (vi->menu);
+  gtk_widget_destroy (vi->window);
+  g_free (vi);
+}
+
+/*
+  kkam_iv_donesave ()
+
+  Turns off the viewer's "Save as" file dialog and sets the pointer
+  to NULL  
+*/
+static void kkam_iv_donesave (ViewerInfo *vi)
+{
+  gtk_widget_destroy (vi->fdialog);
+  vi->fdialog = NULL;
+}
+
+/*
+  kkam_iv_dosave ()
+
+  Called when user hits ok on the "Save as" file dialog. Gets the
+  filename, closes the file dialog, and saves the image appropriately.
+*/
+static void kkam_iv_dosave (ViewerInfo *vi)
+{
+  gchar *fname;
+
+  fname = g_strdup (
+       gtk_file_selection_get_filename (GTK_FILE_SELECTION (vi->fdialog)));
+  kkam_iv_donesave (vi);
+  gdk_imlib_save_image (vi->image, fname, NULL);
+  g_free (fname);
+}
+
+/*
+  kkam_iv_saveas ()
+
+  Opens the "Save as" file dialog for an image displayed on the
+  internal viewer.
+*/
+static void kkam_iv_saveas (ViewerInfo *vi)
+{
+  if (vi->fdialog)
+  {
+    gdk_window_raise (vi->fdialog->window);
+    return;
+  }
+
+  vi->fdialog = gtk_file_selection_new ("Save As:");
+
+  gtk_signal_connect_object (
+           GTK_OBJECT (GTK_FILE_SELECTION (vi->fdialog)->ok_button),
+           "clicked",
+           GTK_SIGNAL_FUNC (kkam_iv_dosave), (gpointer)vi);
+  gtk_signal_connect_object (
+           GTK_OBJECT (GTK_FILE_SELECTION (vi->fdialog)->cancel_button),
+           "clicked",
+           GTK_SIGNAL_FUNC (kkam_iv_donesave), (gpointer)vi);
+  gtk_widget_show (vi->fdialog);
+}
+
+/*
+  kkam_iv_makemenu ()
+
+  Creates the popup menu seen when left- or right- clicking on the
+  internal viewer
+*/
+static void kkam_iv_makemenu (ViewerInfo *vi)
+{
+  vi->menu = gtk_menu_new ();
+  kkam_add_menu_item (vi->menu, "Close",
+                      GTK_SIGNAL_FUNC (kkam_iv_destroy), (gpointer)vi);
+  kkam_add_menu_item (vi->menu, "Save As..",
+                      GTK_SIGNAL_FUNC (kkam_iv_saveas), (gpointer)vi);
+}
+
+/*
+  kkam_iv_popup ()
+
+  Shows the popup menu after user left- or right- clicks on the
+  internal viewer
+*/
+static gint kkam_iv_popup (ViewerInfo *vi, GdkEventButton *ev)
+{
+  if (ev->button == 1 || ev->button == 3)
+    gtk_menu_popup (GTK_MENU (vi->menu), NULL, NULL, NULL, NULL,
+                    ev->button, ev->time);
   return FALSE;
+}
+
+/*
+  kkam_iv_resize ()
+
+  Rerenders the image when a user resizes the internal viewer window
+*/
+static gint kkam_iv_resize (ViewerInfo *vi, GdkEventConfigure *ev)
+{
+  GdkPixmap *pix;
+  GdkBitmap *bit;
+
+  gdk_imlib_render (vi->image, ev->width, ev->height);
+  pix = gdk_imlib_copy_image (vi->image);
+  bit = gdk_imlib_copy_mask (vi->image);
+  gtk_pixmap_set (GTK_PIXMAP (vi->pmap), pix, bit);
+  gdk_imlib_free_pixmap (pix);
+  gdk_imlib_free_pixmap (bit);
+
+  return TRUE;
 }
 
 /*
@@ -347,23 +485,44 @@ static gint destroy_viewer (GtkWidget *window, GdkEvent *ev, gpointer n)
 */
 static void kkam_internal_viewer (char *filename)
 {
-  GtkWidget *window, *pmap;
+  GtkWidget *ebox;
   GdkPixmap *pix;
   GdkBitmap *bit;
+  ViewerInfo *vi;
 
-  if (gdk_imlib_load_file_to_pixmap (filename, &pix, &bit) == 0)
+  vi = g_new0 (ViewerInfo, 1);
+  if ((vi->image = gdk_imlib_load_image (filename)) == NULL)
+  {
+    g_free (vi);
     return;
-  
-  window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
-  gtk_window_set_title (GTK_WINDOW (window), filename);
-  gtk_signal_connect (GTK_OBJECT (window), "delete_event",
-                      GTK_SIGNAL_FUNC (destroy_viewer), NULL);
+  }
 
-  pmap = gtk_pixmap_new (pix, bit);
-  gtk_container_add (GTK_CONTAINER (window), pmap);
-  gtk_widget_show_all (window);
+  vi->fdialog = NULL;
+  kkam_iv_makemenu (vi);
+  vi->window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+  gtk_window_set_title (GTK_WINDOW (vi->window), filename);
+  gtk_signal_connect_object (GTK_OBJECT (vi->window), "delete_event",
+                             GTK_SIGNAL_FUNC (kkam_iv_destroy),
+                             (gpointer)vi);
+  gtk_signal_connect_object (GTK_OBJECT (vi->window), "configure_event",
+                             GTK_SIGNAL_FUNC (kkam_iv_resize),
+                             (gpointer)vi);
+  gtk_window_set_policy (GTK_WINDOW (vi->window), TRUE, TRUE, FALSE);
+  gtk_window_set_wmclass (GTK_WINDOW (vi->window), "KKamViewer", "GKrellm");
+
+  gdk_imlib_render (vi->image, vi->image->rgb_width, vi->image->rgb_height);
+  pix = gdk_imlib_copy_image (vi->image);
+  bit = gdk_imlib_copy_mask (vi->image);
+  vi->pmap = gtk_pixmap_new (pix, bit);
   gdk_imlib_free_pixmap (pix);
   gdk_imlib_free_pixmap (bit);
+  ebox = gtk_event_box_new ();
+  gtk_container_add (GTK_CONTAINER (ebox), vi->pmap);
+  gtk_container_add (GTK_CONTAINER (vi->window), ebox);
+  gtk_widget_set_events (ebox, GDK_BUTTON_PRESS_MASK);
+  gtk_signal_connect_object (GTK_OBJECT (ebox), "button_press_event",
+                             GTK_SIGNAL_FUNC (kkam_iv_popup), (gpointer)vi);
+  gtk_widget_show_all (vi->window);
 }
 
 /*
