@@ -1,6 +1,10 @@
 GKrellKam Changelog
 -------------------
 
+0.2.2 - Jul 12, 2001
+  * Translated krellkam_load into Perl for a little more
+    sophistication, and in preparation for more enhancements
+
 0.2.1 - Jul 11, 2001
   * Added option to have each image maintain its aspect ratio
     (Thanks to Benjamin Johnson <benj@visi.com>)

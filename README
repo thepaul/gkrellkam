@@ -40,11 +40,17 @@ default script, krellkam_load, rotates a list of local images and remote
 images, downloading the remote ones into a certain location.. but you could
 make scripts to do anything.
 
-This new version of GKrellKam can do multiple panels at the same time. I
-thought that would be a nice feature from quite early on, but it took a lot
-more rewriting than I thought it would! Regardless, the capability is now
-there and hopefully bug-free. Bug reports, if you find anything wrong, will
-be quite helpful.
+The script krellkam_load has been rewritten in Perl for this release. It has
+a few new features- you can give it a file on the command line without any
+options, and it will determine whether it's a web address, list of pictures,
+local image file, or a script, and do the Right Thing with it. This is in
+preparation for some changes in future releases.
+
+GKrellKam can do multiple image panels at the same time, with individual
+configurations. I thought that would be a nice feature from quite early on,
+but it took a lot more rewriting than I thought it would! Regardless, the
+capability is now there and hopefully bug-free. Bug reports, if you find
+anything wrong, will be quite helpful.
 
 Thanks to Benjamin Johnson (benj@visi.com) for some of the image scaling
 code.
