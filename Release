@@ -1,4 +1,7 @@
-Notes for GKrellKam version 0.2.2b:
+Notes for GKrellKam version 0.2.2d:
+
+0.2.2d is a bugfix to 0.2.2b for older Perls that need two parameters
+to mkdir. Added further bugfixes to start wget correctly.
 
 krellkam_load is now required, and called for all image panels. The user
 only sets the parameters to krellkam_load. This means that a user can just
