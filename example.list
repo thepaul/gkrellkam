@@ -1,0 +1,49 @@
+# example.list
+#
+# Included with the GKrellKam 0.2.3 distribution
+# by paul cannon- usage, modification, and copying not restricted
+
+# Notes:
+#
+# - you don't need to put the type prefix (image:, etc) before
+#   each source, to make this compatible with older GKrellKams, but
+#   it is recommended for readability.
+# - make sure to use a single tab character (\t) to indent
+#   properties for sources, like tooltip: or seconds:.
+# - see gkrellkam-list(5) for more info.
+
+# Show the building where I work
+url: http://www.usu.edu/webcam/usucam.jpg
+	tooltip: This is where paul works!
+
+# Show some pictures of my friends
+image: /home/paul/pics/friends.png
+	tooltip: If you have this on your machine, I'll be surprised...
+image: /home/paul/pics/playing.png
+image: /home/paul/pics/v.gif
+
+# Still works without the image: prefix..
+/home/paul/pics/something.jpg
+/home/paul/pics/scannedpic.tif
+
+# Get the next images to display from scripts
+
+script: echo "/home/paul/pics/mypic.xpm"
+# okay, it wasn't a very complicated script..
+
+# if I don't put the 'script:' prefix, I need to put the whole path
+# so that GKrellKam knows that echo is executable.
+/bin/echo "/home/paul/pics/mypic2.ppm"
+
+script: /home/paul/bin/nextimage.pl
+
+# Show a webcam in sunny Hawaii for only 10 seconds (don't want to
+# be distracted from work)
+http://webcam.its.hawaii.edu/uhmwebcam/image01.jpg
+	seconds: 10
+	tooltip: Hey! Keep working!
+
+# Include the contents of another list right here- tooltips and
+# seconds properties are not valid on a list.
+list: /home/paul/lists/fiji.list
+

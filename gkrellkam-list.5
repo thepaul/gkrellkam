@@ -1,0 +1,88 @@
+.TH GKRELLKAM-LIST 5 "Jul 30, 2001"
+.SH NAME
+gkrellkam-list \- format of the list description files used by GKrellKam
+.SH DESCRIPTION
+GKrellKam lists describe a series of \fBimage sources\fP, used in order or at
+random by the GKrellKam plugin.
+.PP
+Blank lines and comments (beginning with '#') in GKrellKam lists are
+ignored. Every line of text that does not begin with a tab character
+is considered an \fBimage source\fP.
+.PP
+An \fBimage source\fP can be one of several types:
+.PP
+.IP \fIimage\fP
+Sources of type \fIimage\fP consist of a complete local filename to an
+image file.
+.IP \fIurl\fP
+Type \fIurl\fP is just that; a ftp:// or http:// URL pointing at an online
+image file.
+.IP \fIscript\fP
+Type \fIscript\fP is a system command, executed in a shell by GKrellKam
+when it's time to get this image. The output of the command is assumed to
+be a complete filename of a local image file, optionally terminated with
+newlines/whitespace. The corresponding image is loaded.
+.IP \fIlist\fP
+Type \fIlist\fP causes a different GKrellKam list to be included in the
+current one.
+.PP
+Each \fBimage source\fP line should look like this:
+.RS
+.sp
+\fBtype\fP: \fBname\fP
+.sp
+.RE
+The \fB"type: "\fP part of the line can be omitted for images and URLs,
+to make these list files backwards compatible with earlier versions of
+GKrellKam, but it is suggested that you specify them. It will enhance the
+readability of the list file.
+.PP
+There are also \fBproperties\fP that can be applied to types \fIimage\fP,
+\fIurl\fP, and \fIscript\fP. Properties must follow the \fBimage source\fP
+line that they modify, and must begin with a tab character. These include:
+.PP
+.IP \fItooltip\fP
+This sets the message shown when the mouse is kept over the image panel
+in GKrellKam for a few seconds. If not set, the image's filename or URL
+is shown instead.
+.IP \fIseconds\fP
+This changes the number of seconds that an image will remain displayed.
+If not set, the "Default number of seconds" set for that panel in the
+GKrellM configuration window will be used.
+.PP
+.SH EXAMPLE
+This is a simple example of a GKrellKam list. For a better example, see
+\fBexample.list\fP from this distribution.
+.RS
+.sp
+.nf
+.ne 7
+# .krellkam.list
+# This list rotates through ~/pics/mypic[1-4].jpg along with a
+# webcam, and then displays the pictures in ~/lists/sub.list
+
+image: /home/paul/pics/mypic1.jpg
+/home/paul/pics/mypic2.jpg
+image: /home/paul/pics/mypic3.jpg
+http://www.usu.edu/webcam/fullsize.jpg
+\fB[tab]\fP tooltip: This is the building where I work
+
+image: /home/paul/pics/mypic4.jpg
+\fB[tab]\fP seconds: 4
+\fB[tab]\fP tooltip: Don't display this one very long
+
+list: /home/paul/lists/sub.list
+.fi
+.sp
+.RE
+.SH FILES
+\fB$HOME/.krellkam.list\fP - The default source for the first
+GKrellKam panel
+.br
+\fBexample.list\fP - A sample GKrellKam list
+.SH AUTHOR
+\fBGKrellKam\fP was written by paul cannon <paul@cannon.cs.usu.edu>.
+This manual page was written by the same author for inclusion in the
+GKrellKam distribution, and may be used by others.
+.SH "SEE ALSO"
+.BR wget (8)

@@ -1,13 +1,13 @@
-Notes for GKrellKam version 0.2.2d:
+Notes for GKrellKam version 0.2.3b:
 
-0.2.2d is a bugfix to 0.2.2b for older Perls that need two parameters
-to mkdir. Added further bugfixes to start wget correctly.
-
-krellkam_load is now required, and called for all image panels. The user
-only sets the parameters to krellkam_load. This means that a user can just
-enter a web URL or listfile or local picture in the config box and forget
-about the script. Another script can still be called- put "-x myscript" in
-the config box.
+krellkam_load is no longer required. Its functionality is now built into
+the GKrellKam plugin. This allows (or will allow) for more interesting
+lists of sources for each panel. An included manpage, gkrellkam-list(5),
+describes the new list format. The old list format should still work fine-
+although GKrellKam will not physically rotate the list anymore, or even
+modify the file.
 
 See the Info tab for GKrellKam in the GKrellM configuration window for
 help setting up your panels.
+
+0.2.3b is a bugfix to 0.2.3 to stop deleting local image files.

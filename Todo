@@ -1,24 +1,10 @@
 Planned or considered updates-
 
-- put list management capability into module itself- call wget
-  directly, and phase out krellkam_load. This will allow a lot of
-  things I can't currently do easily. List files will be able to be
-  far more sophisticated and include different settings, etc for each
-  panel. Online lists could be used. Tooltip info could be easily
-  specified. The data directory containing the downloaded images
-  could be controlled, and not cluttered up too much.
-
 - add shading to image to match a gkrellm or desktop theme. I don't know
-  how to do this without a *lot* of image processing code. Does anybody
-  want to contribute a patch?
-
-- tooltip info, as optionally supplied by script
-
-- panel config boxes to accept URLs, filenames of lists and pictures
-    as well as the scripts now present
+  how to do this- I assume I would use the gdk_imlib_set_image_*modifier
+  functions, but I don't know how. Does anybody want to contribute a patch?
 
 - add internal capabilities of GKrellKam accessible via a special
-    command in the list (like a moon clock, etc)
-
-- add 'browse' button for image source box
+    command in the list (like a moon clock, earth watch, weather
+    graphic, etc)
 

@@ -29,14 +29,19 @@
 
 #include <gkrellm/gkrellm.h>
 #include <libgen.h>
+#include <unistd.h>
 #include <errno.h>
+#include <stdlib.h>
+#include <time.h>
 
 #define PLUGIN_NAME "GKrellKam"
-#define PLUGIN_VER "0.2.2d"
+#define PLUGIN_VER "0.2.3b"
 #define PLUGIN_DESC "GKrellM Image Watcher plugin"
 #define PLUGIN_URL "http://gkrellkam.sourceforge.net/"
 #define PLUGIN_STYLE PLUGIN_NAME
 #define PLUGIN_KEYWORD PLUGIN_NAME
+
+#define DEBUGGING 0
 
 static gchar *kkam_info_text[] = 
 {
@@ -48,6 +53,13 @@ static gchar *kkam_info_text[] =
 "You can left-click on an image panel to start your favorite\n",
 "image viewer and display the original, unsized image, or you\n",
 "can right-click on it to get an immediate update.\n\n",
+
+"<b>-- EASY START --\n\n",
+
+"Just put the address of a webcam image in the Image Source\n",
+"box on the configuration tab for one of the panels. The\n",
+"address will probably start with \"http://\" and end in \".jpg\",\n",
+"\".png\", or \".gif\".\n\n",
 
 "<b>-- CONFIGURATION TABS --\n\n",
 
@@ -64,11 +76,13 @@ static gchar *kkam_info_text[] =
 
 "<b>Panel Config Tabs\n\n",
 
-"<i>Minutes per update\n",
+"<i>Default number of seconds per update\n",
 "After an image has been successfully loaded, GKrellKam will\n",
-"wait this many minutes before calling the panel's script\n",
-"again. If you right-click on a panel, it will call the\n",
-"script immediately for an update.\n\n",
+"wait this many seconds before updating the image. Updating\n",
+"might involve reloading the same image, or getting the next\n",
+"image in a list. If you right-click on a panel, it will do\n",
+"the update immediately. This setting can be overridden by\n",
+"specific items in lists.\n\n",
 
 "<i>Height of viewer, in pixels\n",
 "You can adjust this for each panel to give your pictures a\n",
@@ -83,6 +97,11 @@ static gchar *kkam_info_text[] =
 "panel. They maintain their aspect, and theme background is\n",
 "shown on either the sides or the top and bottom.\n\n",
 
+"<i>Select list images at random\n",
+"When this is checked, and your image source is a list, then\n",
+"images will be taken from the list at random rather than\n",
+"cycled through one by one.\n\n",
+
 "<i>Image Source\n",
 "Each panel has a `source' associated with it. A source can be\n",
 "a local picture, the web address of a picture, a list of\n",
@@ -90,14 +109,25 @@ static gchar *kkam_info_text[] =
 "local picture file, list of files, or a script, enter the\n",
 "_full_ filename in the \"Image Source\" box. To watch a webcam\n",
 "or other online picture, just put its address (beginning with\n",
-"http:// or ftp://) in the \"Image Source\" box. GKrellKam uses\n",
-"a script called krellkam_load, included with this distribution,\n",
-"to manage lists of images and download remote ones. In fact,\n",
-"anything you put in the \"Image Source\" box is simply given\n",
-"to krellkam_load as its command line parameters. Run\n",
-"\"krellkam_load --help\" for more detailed usage instructions.\n\n",
+"http:// or ftp://) in the \"Image Source\" box. You'll need\n",
+"GNU wget installed to be able to get pictures from the internet.\n",
+"Special case: when this field begins with \"-x\" followed by a\n",
+"space and some more text, the remaining text is assumed to be a\n",
+"script or other system commmand, and the whole path does not\n",
+"need to be specified.\n\n",
 
-"<b>For more info, see " PLUGIN_URL
+"<i>Reread source button\n",
+"When your image source is a list, GKrellKam will only read in\n",
+"that list once. If it is changed, and you want GKrellKam to\n",
+"follow the changes, you can hit the \"Reread source\" button.\n",
+"This will restart the list. If the source is a script, it will\n",
+"be re-executed. Other sources will be reread as well.\n\n",
+
+"See the included example list, the ",
+"<b>gkrellkam-list(5)",
+" manpage,\nand ",
+"<b>" PLUGIN_URL,
+" online for more info."
 };
 
 static gchar *kkam_about_text = _(
@@ -110,20 +140,39 @@ static gchar *kkam_about_text = _(
   "see the file COPYING for details.\n\n"
   PLUGIN_URL );
 
-const char *default_source[] = {
-  "http://www.usu.edu/webcam/usucam.jpg",
+static const char *default_source[] = {
+  "~/.krellkam.list",
   "~/.krellkam2.list",
   "~/.krellkam3.list",
   "~/.krellkam4.list",
   "~/.krellkam5.list"
 };
 
-const char *default_viewer = "eeyes";
+static const char *default_viewer = "eeyes";
 
-#define WGET_SCRIPT "krellkam_load"
+#define wget_opts "--proxy=off --cache=off"
 #define BUFLEN 256
 #define MIN_NUMPANELS 0
 #define MAX_NUMPANELS 5
+#define MAX_DEPTH 64
+#define MAX_SECONDS 3600
+
+typedef enum {
+  SOURCE_URL,
+  SOURCE_FILE,
+  SOURCE_SCRIPT,
+  SOURCE_LIST
+} SourceEnum;
+
+/* source information structure- panels each have a GList of these */
+
+typedef struct
+{
+  gchar *img_name;
+  gchar *tooltip;
+  int seconds;
+  SourceEnum type;
+} KKamSource;
 
 /* items that each panel needs */
 
@@ -133,20 +182,28 @@ typedef struct
   Decal *decal;
   GdkPixmap *pixmap;
   FILE *cmd_pipe;
+  gchar *imgfname;
+  gboolean delete_when_done;
+  gboolean from_script;
+  gchar *tmpfile;
   int count;
-  char *imgfname;
-  char *source;
   int height;
-  int period;
   int boundary;
+  int default_period;
   gboolean maintain_aspect;
+  gboolean random;
   gint visible;
+
   GtkWidget *period_spinner;
   GtkWidget *boundary_spinner;
   GtkWidget *height_spinner;
   GtkWidget *aspect_box;
+  GtkWidget *random_box;
   GtkWidget *sourcebox;
   GdkImlibImage *imlibim;
+
+  gchar *source;
+  GList *sources;
 } KKamPanel;
 
 static int created = 0;
@@ -163,8 +220,62 @@ static GtkWidget *viewerbox;
 static GtkWidget *numpanel_spinner;
 static GtkWidget *tabs = NULL;
 static GtkWidget *kkam_vbox = NULL;
+static GtkWidget *filebox = NULL;
+
+static GtkTooltips *tooltipobj;
 
 static void change_num_panels ();
+static void create_sources_list (KKamPanel *p);
+
+static KKamSource empty_source = { "", "No config", 0, SOURCE_FILE };
+
+static char *IMG_EXTENSIONS[] = {
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".bmp",
+  ".xpm",
+  ".pbm",
+  ".ppm",
+  ".tif",
+  ".tiff",
+  ".gif"
+};
+
+/*
+  report_error ()
+
+  brings up a message window
+*/
+static void report_error (char *fmt, ...)
+{
+  GtkWidget *label, *button, *vbox, *dialog;
+  va_list ap;
+  char *str;
+ 
+  va_start (ap, fmt);
+  str = g_strdup_vprintf (fmt, ap);
+  va_end (ap);
+
+  dialog = gtk_window_new (GTK_WINDOW_DIALOG);
+  vbox = gtk_vbox_new (FALSE, 0);
+  
+  label = gtk_label_new (_("GKrellKam warning:"));
+  gtk_box_pack_start (GTK_BOX (vbox), label, FALSE, FALSE, 0);
+  label = gtk_label_new (str);
+  gtk_box_pack_start (GTK_BOX (vbox), label, FALSE, FALSE, 0);
+
+  button = gtk_button_new_with_label (_("  OK  "));  
+  gtk_box_pack_start (GTK_BOX (vbox), button, FALSE, FALSE, 0);
+  gtk_container_add (GTK_CONTAINER (dialog), vbox);
+  
+  gtk_signal_connect_object (GTK_OBJECT (button), "clicked",
+                             GTK_SIGNAL_FUNC (gtk_widget_destroy),
+                             (gpointer)dialog);
+  
+  gtk_container_set_border_width (GTK_CONTAINER (dialog), 15);
+  gtk_widget_show_all (dialog);
+}
 
 /*
   validnum ()
@@ -186,6 +297,35 @@ static gboolean validnum (int num)
 static gboolean activenum (int num)
 {
   return (panels && num >= 0 && num < numpanels);
+}
+
+/*
+  panel_cursource ()
+
+  returns a pointer to the source definition of the current image for
+  the current panel, or &empty_source if none.
+*/
+static KKamSource *panel_cursource (KKamPanel *p)
+{
+  if (p->sources == NULL)
+    return &empty_source;
+  return (KKamSource *)(p->sources->data);
+}
+
+/*
+  get_period ()
+
+  returns the time that should elapse before the current image is
+  changed. If the current source's seconds member is 0, use the
+  default_period.
+*/
+static int get_period (KKamPanel *p)
+{
+  int per;
+  
+  if ((per = panel_cursource (p)->seconds) == 0)
+    return p->default_period;
+  return per;
 }
 
 /*
@@ -275,120 +415,255 @@ static void draw_imlibim (KKamPanel *p)
 }
 
 /*
-  start_img_update ()
+  start_img_dl ()
 
-  Open a pipe and spawn the update script.
+  Open a pipe and spawn wget.
 */
-static void start_img_update (KKamPanel *p)
+static void start_img_dl (KKamPanel *p)
 {
-  gchar *krellkam_load_str;
+  gchar *wget_str;
+  char tmpfile[] = "/tmp/krellkamXXXXXX";
+  int tmpfd;
 
   if (p->cmd_pipe) /* already open */
     return;
 
-  if (!p->source)
+  tmpfd = mkstemp (tmpfile); /* this will create the file, perm 0600 */
+  if (tmpfd == -1)
   {
-    fprintf (stderr, "error: source is null\n");
+    report_error (_("Couldn't create temporary file for download: %s"),
+                  strerror (errno));
     return;
   }
+  close (tmpfd);
 
-  krellkam_load_str = g_strdup_printf ("%s %s", WGET_SCRIPT, p->source);
-  p->cmd_pipe = popen (krellkam_load_str, "r");
-  g_free (krellkam_load_str);
-  if (p->cmd_pipe)
-    fcntl (fileno (p->cmd_pipe), F_SETFL, O_NONBLOCK);
+  g_free (p->tmpfile);
+  p->tmpfile = g_strdup (tmpfile);
+  p->delete_when_done = TRUE;
+  p->from_script = FALSE;
+
+  wget_str = g_strdup_printf ("wget -q %s -O %s %s",
+                              wget_opts,
+                              p->tmpfile,
+                              panel_cursource (p)->img_name);
+
+  p->cmd_pipe = popen (wget_str, "r");
+  g_free (wget_str);
+  if (p->cmd_pipe == NULL)
+  {
+    unlink (p->tmpfile);
+    g_free (p->tmpfile);
+    p->tmpfile = NULL;
+    p->delete_when_done = FALSE;
+    report_error (_("Couldn't start wget: %s"), strerror (errno));
+    return;
+  }
+  fcntl (fileno (p->cmd_pipe), F_SETFL, O_NONBLOCK);
 }
 
 /*
-  get_script_results (char *fname)
+  start_script_dl ()
 
-  Checks if results are available from update script. If they are,
-  copies output (a string indicating the new file name) into
-  fname, pcloses the pipe, and returns 1.
+  open a pipe for a user-defined script
+*/
+static void start_script_dl (KKamPanel *p)
+{
+  char *scriptname;
+
+  if (p->cmd_pipe) /* already open */
+    return;
+
+  p->delete_when_done = FALSE;
+  p->from_script = TRUE;
+
+  scriptname = panel_cursource (p)->img_name;
+  if (!strncmp (scriptname, "-x", 2))
+    scriptname += 2;
+
+  p->cmd_pipe = popen (scriptname, "r");
+  if (p->cmd_pipe == NULL)
+  {
+    p->from_script = FALSE;
+    report_error (_("Couldn't start script \"%s\": %s\n"),
+                  panel_cursource (p)->img_name, strerror (errno));
+    return;
+  }
+  fcntl (fileno (p->cmd_pipe), F_SETFL, O_NONBLOCK);
+}
+
+/*
+  load_image_file ()
+
+  If the file newname exists, loads it into p's imlibim member,
+  and updates p->imgfname (deleting old file if appropriate).
+  Calls draw_imlibim. Also, sets image tooltip.
+*/
+static void load_image_file (KKamPanel *p, char *newname)
+{
+  struct stat img_st;
+  KKamSource *ks;
+
+  /* make sure file is really there. when the imlib stuff
+     fails it's really loud */
+  if (stat (newname, &img_st) == -1)
+    return;
+  
+  p->imgfname = g_strdup (newname);
+
+  if (p->imlibim)    
+    gdk_imlib_kill_image (p->imlibim);
+  p->imlibim = gdk_imlib_load_image (p->imgfname);
+  draw_imlibim (p);  
+  p->count = get_period (p);
+
+  ks = panel_cursource (p);
+  if (ks->tooltip)
+    gtk_tooltips_set_tip (tooltipobj, p->panel->drawing_area,
+                          panel_cursource (p)->tooltip, NULL);
+  else
+    gtk_tooltips_set_tip (tooltipobj, p->panel->drawing_area,
+                          panel_cursource (p)->img_name, NULL);
+}
+
+/*
+  cmd_results (char *fname)
+
+  Checks if the command pipe is dead yet. If so, checks its output
+  status and returns 1 if the command was successful.
 
   On error, returns -1. On not yet ready, returns 0.
 */
-static int get_script_results (KKamPanel *p)
+static int cmd_results (KKamPanel *p)
 {
-  char buffer[BUFLEN];
-  int len;
+  int code, len;
+  char buf[BUFLEN];
 
-  if (fread (buffer, sizeof (char), 1, p->cmd_pipe) < 1)
+  if (fread (buf, sizeof (char), 1, p->cmd_pipe) < 1)
   {
     /* if we get EAGAIN, wait some more */
     if (ferror (p->cmd_pipe) && errno == EAGAIN)
       return 0;
 
-    /* if we reach here something has gone wrong with the pipe.
-       return error code */
-    pclose (p->cmd_pipe);
+    /* if we reach here the pipe is dead- the command has finished. */
+    code = pclose (p->cmd_pipe);
     p->cmd_pipe = NULL;
-    return -1;
+    if (p->from_script == FALSE && code == 0) /* success for wget */
+    {
+      load_image_file (p, p->tmpfile);
+      g_free (p->tmpfile);
+      p->tmpfile = NULL;
+      return 1;
+    }
+    else
+      return -1;
   }
   
-  /* if we get here the pipe is ready. */
-  len = fread (&buffer[1], sizeof (char), BUFLEN - sizeof (char),
-               p->cmd_pipe);
-  buffer[len] = '\0';
-  if (p->imgfname)
-    g_free (p->imgfname);
-  p->imgfname = g_strdup (buffer);
+  if (p->from_script)
+  {
+    len = fread (&buf[1], sizeof (char), BUFLEN - 2, p->cmd_pipe);
+    if (len >= 0)
+      buf[len + 1] = '\0';
+    g_strstrip (buf);
+    load_image_file (p, buf);
+  }
 
+  /* if we get here with wget, then wget said something. This is generally
+     not good, since we passed -q. We'll have to wait for it to die */
+    
   pclose (p->cmd_pipe);
   p->cmd_pipe = NULL;
-  return 1;
+  return -1;
 }
 
 /*
-  checkscript ()
-  
-  If results are available from update script, load the new file and
-  draw it onto the panel.
+  rotate_sources ()
+
+  moves the current source item to the end of the list, unless
+  p is set for random.
 */
-static void checkscript (KKamPanel *p)
+static void rotate_sources (KKamPanel *p)
 {
-  struct stat img_st;
+  GList *link;
+  int times, i;
 
-  if (!p->cmd_pipe)
+  if (p == NULL || p->sources == NULL)
     return;
 
-  if (get_script_results (p) < 1)
+  times = p->random ? (rand () % (g_list_length (p->sources) - 1) + 1) : 1;
+  for (i = 0; i < times; i++)
+  {
+    link = p->sources;
+    p->sources = g_list_remove_link (p->sources, link);
+    p->sources = g_list_concat (p->sources, link);
+  }
+}
+
+/*
+  update_image ()
+
+  determines what the current image source is, and updates or
+  starts an update as appropriate
+*/
+static void update_image (KKamPanel *p)
+{
+  KKamSource *ks;
+  
+  ks = panel_cursource (p);
+  if (ks->img_name == NULL)
     return;
+  
+  if (p->imgfname)
+  {
+    if (p->delete_when_done)
+      unlink (p->imgfname);
+    g_free (p->imgfname);
+    p->imgfname = NULL;
+  }
+  p->delete_when_done = FALSE;
 
-  /* make sure file is really there. when the imlib stuff
-     fails it's really loud */
-  if (stat (p->imgfname, &img_st) == -1)
-    return;
-
-  if (p->imlibim)
-    gdk_imlib_kill_image (p->imlibim);
-  p->imlibim = gdk_imlib_load_image (p->imgfname);
-
-  draw_imlibim (p);
+  switch (ks->type)
+  {
+  case SOURCE_SCRIPT:
+    start_script_dl (p);
+    break;
+  case SOURCE_URL:
+    start_img_dl (p);
+    break;
+  case SOURCE_FILE:
+    load_image_file (p, ks->img_name);
+    break;
+  default:
+    report_error (_("Invalid type %d found in sources list!"), ks->type);
+  }
 }
 
 /*
   kkam_update_plugin ()
 
-  callback to gkrellm. Counts minutes until next update, and when
+  callback from gkrellm. Counts seconds until next update, and when
   count is reached, starts the update process.
 */
 static void kkam_update_plugin ()
 {
   int i;
 
-  if (GK.two_second_tick)
+  if (GK.second_tick)
     for (i = 0; i < numpanels; i++)
+    {
       if (panels[i].cmd_pipe)
+        cmd_results (&panels[i]);
+      else if (--panels[i].count <= 0)
       {
-        checkscript (&panels[i]);
-        panels[i].count = 0;
+        rotate_sources (&panels[i]);
+        update_image (&panels[i]);
       }
+    }
+}
 
-  if (GK.minute_tick)
-    for (i = 0; i < numpanels; i++)
-      if ((panels[i].count = (panels[i].count + 1) % panels[i].period) == 0)
-        start_img_update (&panels[i]);
+void showsource (KKamSource *s)
+{
+  fprintf (stderr, "name %s, type %d, seconds %d, tooltip %s\n",
+                   s->img_name, s->type, s->seconds, s->tooltip);
 }
 
 /*
@@ -417,8 +692,14 @@ static gint show_curimage (GtkWidget *widget, GdkEventButton *ev, gpointer gw)
       g_free (cmd);
     }
     break;
+  case 2:
+#if DEBUGGING
+    fprintf (stderr, "sources list:\n");
+    g_list_foreach (panels[which].sources, (GFunc)showsource, NULL);
+#endif
+    break;
   case 3:
-    start_img_update (&panels[which]);
+    panels[which].count = 0;
     break;
   }
   return FALSE;
@@ -443,7 +724,14 @@ static gint panel_expose_event (GtkWidget *widget,
   return FALSE;
 }
 
-static void cb_boundary_spinner (gpointer s, KKamPanel *p)
+static void cb_aspect_box (KKamPanel *p)
+{
+  p->maintain_aspect = GTK_TOGGLE_BUTTON (p->aspect_box)->active;
+  gkrellm_config_modified ();
+  draw_imlibim (p);
+}
+
+static void cb_boundary_spinner (gpointer w, KKamPanel *p)
 {
   p->boundary = gtk_spin_button_get_value_as_int
                                  (GTK_SPIN_BUTTON (p->boundary_spinner));
@@ -451,14 +739,7 @@ static void cb_boundary_spinner (gpointer s, KKamPanel *p)
   draw_imlibim (p);
 }
 
-static void cb_aspect_box (gpointer s, KKamPanel *p)
-{
-  p->maintain_aspect = GTK_TOGGLE_BUTTON (p->aspect_box)->active;
-  gkrellm_config_modified ();
-  draw_imlibim (p);
-}
-
-static void cb_height_spinner (gpointer s, KKamPanel *p)
+static void cb_height_spinner (gpointer w, KKamPanel *p)
 {
   int newheight;
 
@@ -482,47 +763,116 @@ static void cb_height_spinner (gpointer s, KKamPanel *p)
 }
 
 /*
+  src_set ()
+
+  sets the image source from the file selection dialog
+*/
+static void src_set (KKamPanel *p)
+{
+  g_free (p->source);
+  p->source = g_strdup (gtk_file_selection_get_filename (
+                                            GTK_FILE_SELECTION (filebox)));
+  gkrellm_config_modified ();
+  gtk_entry_set_text (GTK_ENTRY (p->sourcebox), p->source);
+  gtk_widget_destroy (GTK_WIDGET (filebox));
+  create_sources_list (p);
+  p->count = get_period (p);
+  update_image (p);
+}
+
+/*
+  srcbrowse ()
+
+  brings up a file browser window to select a source
+*/
+static void srcbrowse (KKamPanel *p)
+{
+  filebox = gtk_file_selection_new ("Select Image Source");
+  gtk_signal_connect_object (
+                     GTK_OBJECT (GTK_FILE_SELECTION (filebox)->ok_button),
+                     "clicked", GTK_SIGNAL_FUNC (src_set), (gpointer)p);
+  gtk_signal_connect_object (
+                     GTK_OBJECT (GTK_FILE_SELECTION (filebox)->cancel_button),
+                     "clicked",
+                     GTK_SIGNAL_FUNC (gtk_widget_destroy),
+                     (gpointer)filebox);
+
+  gtk_widget_show (filebox);
+}
+
+/*
+  srcreread ()
+
+  rereads the source of a panel- this is useful if, for example,
+  one changes a list and wants the new list used
+*/
+static void srcreread (KKamPanel *p)
+{
+  g_free (p->source);
+  p->source = gtk_editable_get_chars (GTK_EDITABLE (p->sourcebox), 0, -1);
+  create_sources_list (p);
+  p->count = get_period (p);
+  update_image (p);
+}
+
+/*
   create_configpanel_tab ()
 
   Creates a GtkVbox for the configuration of one of the panels
 */
 static GtkWidget *create_configpanel_tab (int i)
 {
-  GtkWidget *vbox, *sourcehbox, *sourcelabel;
+  GtkWidget *vbox, *hbox, *button, *sourcelabel;
 
   vbox = gtk_vbox_new (FALSE, 0);
 
   gkrellm_spin_button (vbox, &panels[i].period_spinner,
-                       (gfloat) panels[i].period,
-                       1.0, 500.0, 1.0, 10.0, 0, 0, NULL, NULL,
-                       FALSE, _("Minutes per update"));
+                       (gfloat) panels[i].default_period,
+                       1.0, (gfloat)MAX_SECONDS, 1.0, 10.0, 0, 0, NULL, NULL,
+                       FALSE, _("Default number of seconds per update"));
 
   gkrellm_spin_button (vbox, &panels[i].height_spinner,
                        (gfloat) panels[i].height,
                        10.0, 100.0, 1.0, 5.0, 0, 0, cb_height_spinner, &panels[i],
                        FALSE, _("Height of viewer, in pixels"));
 
-  gkrellm_spin_button (vbox, &panels[i].boundary_spinner,
+  hbox = gtk_hbox_new (FALSE, 0);
+  gkrellm_spin_button (hbox, &panels[i].boundary_spinner,
                        (gfloat) panels[i].boundary,
                        0.0, 20.0, 1.0, 1.0, 0, 0, cb_boundary_spinner, &panels[i],
                        FALSE, _("Border size"));
   
-  gkrellm_check_button (vbox, &panels[i].aspect_box,
+  gkrellm_check_button (hbox, &panels[i].aspect_box,
                         panels[i].maintain_aspect,
                         TRUE, 0, _("Maintain aspect ratio"));
+  gtk_box_pack_start (GTK_BOX (vbox), hbox, TRUE, TRUE, 0);
   
-  gtk_signal_connect (GTK_OBJECT (panels[i].aspect_box), "toggled",
-                      GTK_SIGNAL_FUNC (cb_aspect_box), &panels[i]);
+  gtk_signal_connect_object (GTK_OBJECT (panels[i].aspect_box), "toggled",
+                        GTK_SIGNAL_FUNC (cb_aspect_box), (gpointer)&panels[i]);
 
-  sourcehbox = gtk_hbox_new (FALSE, 0);
+  gkrellm_check_button (vbox, &panels[i].random_box,
+                        panels[i].random,
+                        TRUE, 0, _("Select list images at random"));
+
+  hbox = gtk_hbox_new (FALSE, 0);
   sourcelabel = gtk_label_new (_("Image source:  "));
   panels[i].sourcebox = gtk_entry_new ();
   gtk_entry_set_text (GTK_ENTRY (panels[i].sourcebox), panels[i].source);
   gtk_entry_set_editable (GTK_ENTRY (panels[i].sourcebox), TRUE);
+  button = gtk_button_new_with_label (_("Browse.."));
+  gtk_signal_connect_object (GTK_OBJECT (button), "clicked",
+                             GTK_SIGNAL_FUNC (srcbrowse), (gpointer)&panels[i]);
+  gtk_box_pack_start (GTK_BOX (hbox), sourcelabel, FALSE, FALSE, 0);
+  gtk_box_pack_start (GTK_BOX (hbox), panels[i].sourcebox, TRUE, TRUE, 0);
+  gtk_box_pack_start (GTK_BOX (hbox), button, FALSE, FALSE, 0);
+  gtk_box_pack_start (GTK_BOX (vbox), hbox, TRUE, FALSE, 0);
 
-  gtk_box_pack_start (GTK_BOX (sourcehbox), sourcelabel, FALSE, FALSE, 0);
-  gtk_box_pack_start (GTK_BOX (sourcehbox), panels[i].sourcebox, TRUE, TRUE, 0);
-  gtk_box_pack_start (GTK_BOX (vbox), sourcehbox, TRUE, TRUE, 0);
+  hbox = gtk_hbox_new (FALSE, 5);
+  button = gtk_button_new_with_label (_("Reread source"));
+  gtk_signal_connect_object (GTK_OBJECT (button), "clicked",
+                             GTK_SIGNAL_FUNC (srcreread), (gpointer)&panels[i]);
+  gtk_box_pack_start (GTK_BOX (hbox), button, TRUE, TRUE, 0);
+  gtk_box_pack_start (GTK_BOX (vbox), hbox, TRUE, FALSE, 0);
 
   gtk_widget_show_all (vbox);
 
@@ -532,7 +882,7 @@ static GtkWidget *create_configpanel_tab (int i)
 /*
   insert_configpanel_tab ()
 
-  Creates a new configration tab and inserts it into the config box
+  Creates a new configuration tab and inserts it into the config box
 */
 static void insert_configpanel_tab (int i)
 {
@@ -558,7 +908,7 @@ static void insert_configpanel_tab (int i)
 */
 static void remove_configpanel_tab (int i)
 {
-  if (!GTK_OBJECT (tabs))
+  if (!GTK_IS_OBJECT (tabs))
     return;
 
   gtk_notebook_remove_page (GTK_NOTEBOOK (tabs), i + 1);
@@ -568,8 +918,7 @@ static void remove_configpanel_tab (int i)
   change_num_panels ()
 
   called to move the number in `newnumpanels' into
-  `numpanels' with all associated changes to the
-  monitor
+  `numpanels' with all associated changes to the monitor
 */
 static void change_num_panels ()
 {
@@ -600,7 +949,7 @@ static void change_num_panels ()
     for (i = numpanels; i < newnumpanels; i++)
     {
       insert_configpanel_tab (i);
-      start_img_update (&panels[i]);
+      update_image (&panels[i]);
     }
   }
 
@@ -621,11 +970,13 @@ static void kkam_create_plugin (GtkWidget *vbox, gint first_create)
     for (i = 0; i < MAX_NUMPANELS; i++)
       panels[i].panel = gkrellm_panel_new0 ();
 
-    for (i = 0; i < numpanels; i++)
-      start_img_update (&panels[i]);
-
     if (viewer_prog == NULL)
       viewer_prog = g_strdup (default_viewer);
+
+    tooltipobj = gtk_tooltips_new ();
+    gtk_tooltips_set_delay (tooltipobj, 1000);
+
+    srand (time (NULL)); /* randomize from timer */
   }
 
   img_style = gkrellm_meter_style (style_id);
@@ -651,13 +1002,15 @@ static void kkam_create_plugin (GtkWidget *vbox, gint first_create)
     for (i = 0; i < MAX_NUMPANELS; i++)
     {
       gtk_signal_connect (GTK_OBJECT (panels[i].panel->drawing_area),
-            "expose_event", (GtkSignalFunc) panel_expose_event,
+            "expose_event", GTK_SIGNAL_FUNC (panel_expose_event),
             GINT_TO_POINTER (i));
       gtk_signal_connect (GTK_OBJECT (panels[i].panel->drawing_area),
-            "button_press_event", (GtkSignalFunc) show_curimage,
+            "button_press_event", GTK_SIGNAL_FUNC (show_curimage),
             GINT_TO_POINTER (i));
             
       gkrellm_draw_layers (panels[i].panel);
+      if (i < numpanels)
+        update_image (&panels[i]);
     }
   }
   else
@@ -671,30 +1024,341 @@ static void kkam_create_plugin (GtkWidget *vbox, gint first_create)
   }
 }
 
-static gchar *update_script_config (char *oldval)
+static KKamSource *kkam_source_new ()
 {
-  gchar *chopmeup, *ret;
+  return g_new0 (KKamSource, 1);
+}
+
+static void kkam_source_free (KKamSource *ks)
+{
+  g_free (ks->img_name);
+  g_free (ks->tooltip);
+  g_free (ks);
+}
+
+static void destroy_sources_list (KKamPanel *p)
+{
+  g_list_foreach (p->sources, (GFunc)kkam_source_free, NULL);
+  g_list_free (p->sources);
+  p->sources = NULL;
+}
+
+/*
+  addto_sources_list ()
+
+  Adds a component to the sources list for panel p. The name
+  and type are copied from name and type. The new component
+  is returned, in case it needs to be modified further.
+*/
+static KKamSource *addto_sources_list (KKamPanel *p, char *name, SourceEnum type)
+{
+  KKamSource *ks;
+
+  ks = kkam_source_new ();
+  ks->type = type;
+  ks->img_name = g_strdup (name);
+  p->sources = g_list_append (p->sources, (gpointer)ks);
+
+  return ks;
+}
+
+/*
+  endswith ()
+
+  returns TRUE if the end of str matches endstr
+*/
+static gboolean endswith (char *str, char *endstr)
+{
+  int len, lenend;
+
+  if ((len = strlen (str)) < (lenend = strlen (endstr)))
+    return FALSE;
+  return !strcmp (&str[len - lenend], endstr);
+}
+
+/*
+  source_type_of ()
+
+  determines what type of source is represented by the given
+  string, according to these rules, checked in order:
+
+  - A source beginning with 'http:' or 'ftp:' is a SOURCE_URL.
+  - A source that begins with '-x' is a SOURCE_SCRIPT.
+  - A source with an extension in IMG_EXTENSIONS is a SOURCE_FILE.
+  - A source that matches a filename that is executable by the user is
+     a SOURCE_SCRIPT.
+  - A source ending in .list is a SOURCE_LIST.
+  - If none of the above apply, and the source is a filename, the
+     file is opened. If it 'looks' like a GKrellKam list configuration
+     file, it is a SOURCE_LIST.
+  - Otherwise, it is a SOURCE_FILE.
+
+FIXME: spaghetti!
+*/
+static SourceEnum source_type_of (char *def)
+{
+  int i, p, len;
+  FILE *test;
+  gchar **words;
+  unsigned char buf[BUFLEN];
+  
+  words = g_strsplit (def, " ", 2);
+  if (!words || !words[0]) /* wish I didn't need this */
+    return SOURCE_FILE;
+
+  if (!strncmp (words[0], "http:", 5) || !strncmp (words[0], "ftp:", 4))
+  {
+    g_strfreev (words);
+    return SOURCE_URL;
+  }
+  if (!strcmp (words[0], "-x"))
+  {
+    g_strfreev (words);
+    return SOURCE_SCRIPT;
+  }
+  for (i = 0; i < (sizeof (IMG_EXTENSIONS) / sizeof (IMG_EXTENSIONS[0])); i++)
+  {
+    if (endswith (words[0], IMG_EXTENSIONS[i]))
+    {
+      g_strfreev (words);
+      return SOURCE_FILE;
+    }
+  }
+  if (access (words[0], X_OK) == 0)
+  {
+    g_strfreev (words);
+    return SOURCE_SCRIPT;
+  }
+  if (endswith (words[0], ".list"))
+  {
+    g_strfreev (words);
+    return SOURCE_LIST;
+  }
+  
+  if ((test = fopen (words[0], "r")) != NULL)
+  {
+    len = fread (buf, sizeof (buf[0]), BUFLEN, test);
+    for (p = 0; p < len; p++)
+      if (!isgraph (buf[p]) && !isspace (buf[p]))
+      {
+        fclose (test);
+        g_strfreev (words);
+        return SOURCE_FILE;
+      }
+    g_strfreev (words);
+    fclose (test);
+    return SOURCE_LIST;
+  }
+
+  g_strfreev (words);
+  return SOURCE_FILE;
+}
+
+/*
+  nextword ()
+
+  convenience function for the list reader; returns a pointer in s
+  to the beginning of the next parameter (non-space following a colon)
+*/
+char *nextword (char *s)
+{
+  char *ret;
+
+  for (ret = s; *ret != ':'; ret++) ;
+  ret++;
+  for ( ; isspace (*ret); ret++) ;
+  return ret;
+}
+
+/*
+  kkam_read_list ()
+
+  reads a GKrellKam list configuration file and loads its
+  data into the panel's source GList
+*/
+static void kkam_read_list (KKamPanel *p, char *listname, int depth)
+{
+  KKamSource *ks = NULL;
+  SourceEnum typ;
+  FILE *listfile;
+  char buf[BUFLEN];
+  int thislist_error = 0;
+
+  if (depth > MAX_DEPTH)
+  {
+    report_error (_("Maximum recursion depth exceeded reading list %s; "
+                  "perhaps a list is trying to load itself?"), listname);
+    return;
+  }
+
+  if ((listfile = fopen (listname, "r")) == NULL)
+    return;
+  
+  while (fgets (buf, BUFLEN, listfile))
+  {
+    g_strchomp (buf);
+
+    switch (buf[0])
+    {
+    case '\0':
+    case '#':
+      ks = NULL;
+      break;
+
+    case '\t':
+      if (ks != NULL)
+      {
+        if (!strncmp (&buf[1], "tooltip:", 8))
+          ks->tooltip = g_strdup (nextword (&buf[1]));
+        else if (!strncmp (&buf[1], "seconds:", 8))
+          ks->seconds = CLAMP (atoi (nextword (&buf[1])), 1, MAX_SECONDS);
+      }
+      else if (thislist_error == 0) /* only show one error per file */
+      {
+        thislist_error = 1;
+        report_error (_("In list %s, property line \"%s\" isn't associated"
+                           " with any source!"), listname, &buf[1]);
+      }
+      break;
+      
+    default:
+      if (!strncmp (buf, "image:", 6))
+        ks = addto_sources_list (p, nextword (buf), SOURCE_FILE);
+      else if (!strncmp (buf, "script:", 7))
+        ks = addto_sources_list (p, nextword (buf), SOURCE_SCRIPT);
+      else if (!strncmp (buf, "url:", 4))
+        ks = addto_sources_list (p, nextword (buf), SOURCE_URL);
+      else if (!strncmp (buf, "list:", 5))
+      {
+        kkam_read_list (p, nextword (buf), depth + 1);
+        ks = NULL;
+      }
+      else
+      {
+        typ = source_type_of (buf);
+        if (typ == SOURCE_LIST)
+        {
+          kkam_read_list (p, buf, depth + 1);
+          ks = NULL;
+        }
+        else
+          ks = addto_sources_list (p, buf, source_type_of (buf));
+      }
+    }
+  }
+}
+
+/*
+  create_sources_list ()
+
+  Takes the 'source' of a panel- which can be a web address,
+  local image, script, list, etc.. and translates that into
+  a GList of sources. For most source types, obviously, the
+  sources GList will only have one entry.
+*/
+static void create_sources_list (KKamPanel *p)
+{
+  SourceEnum s;
+
+  if (p->sources)
+    destroy_sources_list (p);
+
+  if (p->source && p->source[0])
+  {
+    switch (s = source_type_of (p->source))
+    {
+    case SOURCE_URL:
+    case SOURCE_FILE:
+    case SOURCE_SCRIPT:
+      addto_sources_list (p, p->source, s);
+      break;
+    case SOURCE_LIST:
+      kkam_read_list (p, p->source, 0);
+      break;
+    }
+  }
+}
+
+/*
+  update_source_config ()
+
+  Translates a 0.2.2[bcd]-style config into an appropriate source item
+*/
+static void update_source_config (KKamPanel *p, char *val)
+{
+  SourceEnum t;
+  gchar **words;
+  gchar *scr;
+  int i;
+
+  g_strdelimit (val, " \t\n", '\n');
+  words = g_strsplit (val, "\n", 0);
+  
+  for (i = 0; words[i]; i++)
+  {
+    if (!strcmp (words[i], "-l") || !strcmp (words[i], "--list"))
+    {
+      g_free (words[i]);
+      words[i] = g_strdup ("");
+    }
+    else if (!strcmp (words[i], "-x") || !strcmp (words[i], "--execute"))
+    {
+      g_free (words[i]);
+      words[i] = g_strdup ("-x");
+      scr = g_strjoinv (" ", &words[i]);
+      addto_sources_list (p, scr, SOURCE_SCRIPT);
+      g_free (p->source);
+      p->source = scr;
+      break;
+    }
+    else if (!strcmp (words[i], "-r") || !strcmp (words[i], "--random"))
+      p->random = TRUE;
+    else
+    {
+      t = source_type_of (words[i]);
+      g_free (p->source);
+      p->source = g_strdup (words[i]);
+      if (t == SOURCE_LIST)
+        kkam_read_list (p, words[i], 0);
+      else
+        addto_sources_list (p, words[i], source_type_of (val));
+    }
+  }
+  g_strfreev (words);
+}
+
+/*
+  update_script_config ()
+
+  Translates a pre-0.2.2-style config into an appropriate source item
+*/
+static void update_script_config (KKamPanel *p, char *val)
+{
+  gchar *chopmeup;
   char *firstword, *rest;
 
-  chopmeup = g_strdup_printf ("%s\n \n", g_strstrip (oldval));
+  chopmeup = g_strdup_printf ("%s\n \n", g_strstrip (val));
   firstword = strtok (chopmeup, " \n");
   if (!firstword)
-    return NULL;
+    return;
   rest = strtok (NULL, "\n");
   if (!rest)
-    return NULL;
+    return;
   g_strstrip (rest);
   
-  /* If the old update_script item was using krellkam_load, just keep its
-     parameters. If it was using a different script, put it with the
-     appropriate option into the krellkam_load parameters (-x) */
+  /* If the old update_script item was using krellkam_load, parse
+     its parameters. If it was using a different script, put it with
+     the appropriate type into the source list */
 
-  if (!strcmp (basename (firstword), WGET_SCRIPT))
-    ret = g_strdup (rest);
+  if (!strcmp (basename (firstword), "krellkam_load"))
+    update_source_config (p, rest);
   else
-    ret = g_strdup_printf ("-x %s", oldval);
+  {
+    g_free (p->source);
+    p->source = g_strdup_printf ("-x %s", val);
+    addto_sources_list (p, val, SOURCE_SCRIPT);
+  }
   g_free (chopmeup);
-  return ret;
 }
 
 static void kkam_save_config (FILE *f)
@@ -706,16 +1370,15 @@ static void kkam_save_config (FILE *f)
 
   for (i = 0; i < MAX_NUMPANELS; i++)
   {
-    fprintf (f, "%s %d source %s\n",
+    fprintf (f, "%s %d sourcedef %s\n",
              PLUGIN_KEYWORD, i + 1, panels[i].source);
-    fprintf (f, "%s %d img_height %d\n",
-             PLUGIN_KEYWORD, i + 1, panels[i].height);
-    fprintf (f, "%s %d update_period %d\n",
-             PLUGIN_KEYWORD, i + 1, panels[i].period);
-    fprintf (f, "%s %d boundary %d\n",
-             PLUGIN_KEYWORD, i + 1, panels[i].boundary);
-    fprintf (f, "%s %d maintain_aspect %d\n",
-             PLUGIN_KEYWORD, i + 1, panels[i].maintain_aspect);
+    fprintf (f, "%s %d options %d.%d.%d.%d.%d\n",
+             PLUGIN_KEYWORD, i + 1,
+             panels[i].height,
+             panels[i].default_period,
+             panels[i].boundary,
+             panels[i].maintain_aspect,
+             panels[i].random);
   }
 }
 
@@ -739,34 +1402,55 @@ static void kkam_load_config (gchar *arg)
   if (value == NULL)
     value = "";
 
-  if (!strcmp (config_item, "img_height"))
+  if (!strcmp (config_item, "options"))
+  {
+    if (validnum (which))
+    {
+      sscanf (value, "%d.%d.%d.%d.%d",
+              &(panels[which].height),
+              &(panels[which].default_period),
+              &(panels[which].boundary),
+              &(panels[which].maintain_aspect),
+              &(panels[which].random));
+      
+      panels[which].height = CLAMP (panels[which].height, 10, 100);
+      panels[which].default_period =
+                           CLAMP (panels[which].default_period, 1, MAX_SECONDS);
+      panels[which].boundary = CLAMP (panels[which].boundary, 0, 20);
+      panels[which].maintain_aspect =
+                          (gboolean)CLAMP (panels[which].maintain_aspect, 0, 1);
+      panels[which].random = (gboolean)CLAMP (panels[which].random, 0, 1);
+    }
+  }
+  else if (!strcmp (config_item, "sourcedef"))
+  {
+    if (validnum (which))
+    {
+      g_free (panels[which].source);
+      panels[which].source = g_strstrip (g_strdup (value));
+      create_sources_list (&panels[which]);
+    }
+  }
+  else if (!strcmp (config_item, "viewer_prog"))
+  {
+    g_free (viewer_prog);
+    viewer_prog = g_strdup (value);
+  }
+  else if (!strcmp (config_item, "numpanels"))
+  {
+    newnumpanels = CLAMP (atoi (value), MIN_NUMPANELS, MAX_NUMPANELS);
+    change_num_panels ();
+  }
+  /* backwards compatibility */
+  else if (!strcmp (config_item, "img_height"))
   {
     if (validnum (which))
       panels[which].height = CLAMP (atoi (value), 10, 100);
   }
-  else if (!strcmp (config_item, "update_period"))
+  else if (!strcmp (config_item, "period"))
   {
     if (validnum (which))
-      panels[which].period = MAX (atoi (value), 1);
-  }
-  else if (!strcmp (config_item, "source"))
-  {
-    if (validnum (which))
-    {
-      if (panels[which].source)
-        g_free (panels[which].source);
-      panels[which].source = g_strstrip (g_strdup (value));
-    }
-  }
-  else if (!strcmp (config_item, "update_script"))
-  {
-    /* this is for backwards compatibility- update old config item */
-    if (validnum (which))
-    {
-      if (panels[which].source)
-        g_free (panels[which].source);
-      panels[which].source = update_script_config (value);
-    }
+      panels[which].default_period = CLAMP (atoi (value), 1, MAX_SECONDS);
   }
   else if (!strcmp (config_item, "maintain_aspect"))
   {
@@ -778,16 +1462,23 @@ static void kkam_load_config (gchar *arg)
     if (validnum (which))
       panels[which].boundary = CLAMP (atoi (value), 0, 20);
   }
-  else if (!strcmp (config_item, "viewer_prog"))
+  else if (!strcmp (config_item, "update_period"))
   {
-    if (viewer_prog)
-      g_free (viewer_prog);
-    viewer_prog = g_strdup (value);
+    /* this is in minutes */
+    if (validnum (which))
+      panels[which].default_period = MAX (atoi (value) * 60, 1);
   }
-  else if (!strcmp (config_item, "numpanels"))
+  else if (!strcmp (config_item, "update_script"))
   {
-    newnumpanels = CLAMP (atoi (value), MIN_NUMPANELS, MAX_NUMPANELS);
-    change_num_panels ();
+    /* update old config item */
+    if (validnum (which))
+      update_script_config (&panels[which], value);
+  }
+  else if (!strcmp (config_item, "source"))
+  {
+    /* backwards compat for 0.2.2[bcd] */
+    if (validnum (which))
+      update_source_config (&panels[which], value);
   }
 }
 
@@ -871,24 +1562,29 @@ static void kkam_create_tab (GtkWidget *tab_vbox)
 
 static void kkam_apply_config ()
 {
-  int i;
+  int i, diff;
+  gchar *newsource;
 
   for (i = 0; i < numpanels; i++)
   {
-    if (panels[i].source)
-      g_free (panels[i].source);
-    panels[i].source = gtk_editable_get_chars
-                               (GTK_EDITABLE (panels[i].sourcebox), 0, -1);
-    panels[i].period = gtk_spin_button_get_value_as_int
+    newsource = gtk_editable_get_chars
+                         (GTK_EDITABLE (panels[i].sourcebox), 0, -1);
+    diff = strcmp (newsource, panels[i].source);
+    g_free (panels[i].source);
+    panels[i].source = newsource;
+    if (diff)
+      create_sources_list (&panels[i]);
+
+    panels[i].default_period = gtk_spin_button_get_value_as_int
                                (GTK_SPIN_BUTTON (panels[i].period_spinner));
     panels[i].maintain_aspect = GTK_TOGGLE_BUTTON (panels[i].aspect_box)->active;
+    panels[i].random = GTK_TOGGLE_BUTTON (panels[i].random_box)->active;
     panels[i].boundary = gtk_spin_button_get_value_as_int
                                (GTK_SPIN_BUTTON (panels[i].boundary_spinner));
   }
 
   newnumpanels = gtk_spin_button_get_value_as_int
                                  (GTK_SPIN_BUTTON (numpanel_spinner));
-  
   change_num_panels ();
 
   if (viewer_prog)
@@ -926,12 +1622,13 @@ Monitor *init_plugin ()
   style_id = gkrellm_add_meter_style (&kam_mon, PLUGIN_STYLE);
   panels = g_new0 (KKamPanel, MAX_NUMPANELS);
   
+  /* the g_new0 initialized everything to 0- pretty convenient for
+     almost everything.. */
+
   for (i = 0; i < MAX_NUMPANELS; i++)
-  {  
-    panels[i].source = g_strdup (default_source[i]);
+  {
     panels[i].height = 50;
-    panels[i].period = 1;
-    panels[i].boundary = 0;
+    panels[i].source = g_strdup (default_source[i]);
   }
 
   return &kam_mon;
