@@ -27,15 +27,21 @@
     g_free'd. Strings of type (char *) are static memory.
 */
 
-#include <gkrellm/gkrellm.h>
+#include <gkrellm.h>
 #include <libgen.h>
 #include <unistd.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <time.h>
 
+#if ((GKRELLM_VERSION_MAJOR == 1) && (GKRELLM_VERSION_MINOR >= 2))
+# define GKRELLM_1_2_0
+# define PLUGIN_VER "0.2.4/s2"
+#else
+# define PLUGIN_VER "0.2.4/s1"
+#endif
+
 #define PLUGIN_NAME "GKrellKam"
-#define PLUGIN_VER "0.2.3b"
 #define PLUGIN_DESC "GKrellM Image Watcher plugin"
 #define PLUGIN_URL "http://gkrellkam.sourceforge.net/"
 #define PLUGIN_STYLE PLUGIN_NAME
@@ -50,10 +56,24 @@ static gchar *kkam_info_text[] =
 "GKrellKam is a plugin that can watch a number of image files,\n",
 "and display them sized to fit in panels on your gkrellm.\n\n",
 
-"You can left-click on an image panel to start your favorite\n",
+"You can ",
+"<b>left-click",
+" on an image panel to start your favorite\n",
 "image viewer and display the original, unsized image, or you\n",
-"can right-click on it to get an immediate update.\n\n",
+"can ",
+"<b>middle-click",
+" on it to get an immediate update.\n\n",
 
+"Scrolling the mouse wheel up over any of the panels increases\n",
+"the number of visible panels, and scrolling it down decreases\n",
+"the number.",
+#ifdef GKRELLM_1_2_0
+" This is compiled for the new GKrellM 1.2.0, so you can also\n",
+"<b>right-click",
+" on a panel to open the configuration window.",
+#endif
+
+"\n\n",
 "<b>-- EASY START --\n\n",
 
 "Just put the address of a webcam image in the Image Source\n",
@@ -206,6 +226,8 @@ typedef struct
   GList *sources;
 } KKamPanel;
 
+static Monitor *monitor;
+
 static int created = 0;
 static int numpanels = 0;
 static int newnumpanels = 1;
@@ -346,8 +368,8 @@ static void draw_imlibim (KKamPanel *p)
   pan_x = gkrellm_chart_width () - 2 * p->boundary;
   pan_y = p->height - 2 * p->boundary;
 
-  /* need to blank out the old image here by redrawing the background
-     maybe there is a better way to do this?? */
+#ifndef GKRELLM_1_2_0
+  /* need to blank out the old image here for the old gkrellm. */
   gkrellm_render_to_pixmap (gkrellm_bg_meter_image (style_id),
                             &(p->pixmap), NULL,
                             gkrellm_chart_width (), p->height);
@@ -356,7 +378,8 @@ static void draw_imlibim (KKamPanel *p)
                                           NULL, 1, img_style, 0, 0);
   gkrellm_draw_decal_pixmap (p->panel, p->decal, 0);
   gkrellm_draw_layers (p->panel);
-
+#endif
+  
   if (p->maintain_aspect)
   {
     /* determine sizing here - maintain aspect ratio */
@@ -404,10 +427,16 @@ static void draw_imlibim (KKamPanel *p)
     loc_y = p->boundary;
   }
   
+#ifdef GKRELLM_1_2_0
+  gkrellm_remove_and_destroy_decal (p->panel, p->decal);
   gkrellm_render_to_pixmap (p->imlibim, &(p->pixmap), NULL,
                             scale_x, scale_y);
-
+#else
+  gkrellm_render_to_pixmap (p->imlibim, &(p->pixmap), NULL,
+                            scale_x, scale_y);
   gkrellm_destroy_decal_list (p->panel);
+#endif
+
   p->decal = gkrellm_create_decal_pixmap (p->panel, p->pixmap,
                                           NULL, 1, img_style, loc_x, loc_y);
   gkrellm_draw_decal_pixmap (p->panel, p->decal, 0);
@@ -684,7 +713,7 @@ static gint show_curimage (GtkWidget *widget, GdkEventButton *ev, gpointer gw)
   
   switch (ev->button)
   {
-  case 1:
+  case 1: /* view image */
     if (panels[which].imgfname)
     {
       cmd = g_strdup_printf ("%s '%s' &", viewer_prog, panels[which].imgfname);
@@ -692,14 +721,23 @@ static gint show_curimage (GtkWidget *widget, GdkEventButton *ev, gpointer gw)
       g_free (cmd);
     }
     break;
-  case 2:
-#if DEBUGGING
-    fprintf (stderr, "sources list:\n");
-    g_list_foreach (panels[which].sources, (GFunc)showsource, NULL);
-#endif
-    break;
-  case 3:
+  case 2: /* immediate update */
     panels[which].count = 0;
+    break;
+
+#ifdef GKRELLM_1_2_0
+  case 3:
+    gkrellm_open_config_window (monitor);
+    break;
+#endif
+
+  case 4:
+    newnumpanels = MIN (numpanels + 1, MAX_NUMPANELS);
+    change_num_panels ();
+    break;
+  case 5:
+    newnumpanels = MAX (numpanels - 1, MIN_NUMPANELS);
+    change_num_panels ();
     break;
   }
   return FALSE;
@@ -748,16 +786,20 @@ static void cb_height_spinner (gpointer w, KKamPanel *p)
   
   if (newheight != p->height)
   {
+#ifdef GKRELLM_1_2_0
+    gkrellm_panel_configure_add_height (p->panel, newheight - p->height);
+    p->height = newheight;
+    gkrellm_panel_create (kkam_vbox, monitor, p->panel);
+#else
     gkrellm_monitor_height_adjust (newheight - p->height);
-      
     p->panel->label->h_panel = newheight;
     p->height = newheight;
-
     gkrellm_create_panel (kkam_vbox, p->panel,
                           gkrellm_bg_meter_image (style_id));
     gkrellm_pack_side_frames ();
-    gkrellm_config_modified ();
-                            
+#endif
+
+    gkrellm_config_modified ();                            
     draw_imlibim (p);
   }
 }
@@ -941,9 +983,14 @@ static void change_num_panels ()
 
     for (i = 0; i < MAX_NUMPANELS; i++)
     {
+#ifdef GKRELLM_1_2_0
+      gkrellm_panel_enable_visibility (panels[i].panel, i < newnumpanels,
+                                       &(panels[i].visible));
+#else
       gkrellm_enable_visibility (i < newnumpanels, &(panels[i].visible),
                                  panels[i].panel->drawing_area,
                                  panels[i].panel->h);
+#endif
     }
 
     for (i = numpanels; i < newnumpanels; i++)
@@ -954,6 +1001,7 @@ static void change_num_panels ()
   }
 
   numpanels = newnumpanels;
+  gkrellm_config_modified ();
 }
 
 static void kkam_create_plugin (GtkWidget *vbox, gint first_create)
@@ -983,17 +1031,29 @@ static void kkam_create_plugin (GtkWidget *vbox, gint first_create)
 
   for (i = 0; i < MAX_NUMPANELS; i++)
   {
+#ifdef GKRELLM_1_2_0
+    gkrellm_panel_configure_add_height (panels[i].panel, panels[i].height);
+    gkrellm_panel_create (vbox, monitor, panels[i].panel);
+    gkrellm_panel_keep_lists (panels[i].panel, TRUE);
+#else
     panels[i].panel->textstyle = gkrellm_meter_textstyle (style_id);
     panels[i].panel->label->h_panel = panels[i].height;
     gkrellm_create_panel (vbox, panels[i].panel,
                           gkrellm_bg_meter_image (style_id));
     gkrellm_monitor_height_adjust (panels[i].panel->h);
+#endif
+
     panels[i].visible = TRUE;
     if (i >= numpanels)
     {
+#ifdef GKRELLM_1_2_0
+      gkrellm_panel_enable_visibility (panels[i].panel, FALSE,
+                                       &(panels[i].visible));
+#else
       gkrellm_enable_visibility (FALSE, &(panels[i].visible),
                                  panels[i].panel->drawing_area,
                                  panels[i].panel->h);
+#endif
     }
   }
 
@@ -1631,6 +1691,6 @@ Monitor *init_plugin ()
     panels[i].source = g_strdup (default_source[i]);
   }
 
-  return &kam_mon;
+  return (monitor = &kam_mon);
 }
 

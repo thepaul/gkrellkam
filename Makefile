@@ -9,10 +9,13 @@ TARGET = gkrellkam
 # To facilitate packaging- leave blank for normal installation
 DESTDIR =
 
+# This should point to the GKrellM headers
+GKRELLM_HDRS = /usr/include/gkrellm
+
 CC := gcc
 GTKFLAGS := $(shell gtk-config --cflags)
 IMLIBFLAGS := $(shell imlib-config --cflags-gdk)
-CFLAGS := $(CFLAGS) -fPIC -Wall $(GTKFLAGS) $(IMLIBFLAGS)
+CFLAGS := $(CFLAGS) -fPIC -Wall $(GTKFLAGS) $(IMLIBFLAGS) -I$(GKRELLM_HDRS)
 LDFLAGS := -shared -Wl
 INST_DIR := $(DESTDIR)/usr/lib/gkrellm/plugins
 USER_INST_DIR := $(DESTDIR)$(HOME)/.gkrellm/plugins
