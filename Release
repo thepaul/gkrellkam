@@ -8,3 +8,6 @@ Notes for GKrellKam version 0.3.0:
   images more than once without redownloading
 * Now lets you give a URL to an online list in the Image
   Source box
+
+(0.3.0b fixes a crash resulting when Select Images at Random
+ is turned on for a non-list source)

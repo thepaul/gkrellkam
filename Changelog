@@ -1,6 +1,10 @@
 GKrellKam Changelog
 -------------------
 
+0.3.0b - Dec 17, 2001
+  * Fixed crash resulting when "Select Images at Random" is
+    turned on for a non-list source
+
 0.3.0 - Dec 10, 2001
   * When downloads fail, don't keep retrying continually
   * Quote urls in wget command to let ampersands, etc work
