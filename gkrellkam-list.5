@@ -1,9 +1,10 @@
-.TH GKRELLKAM-LIST 5 "Jul 30, 2001"
+.TH GKRELLKAM-LIST 5 "Dec 7, 2001"
 .SH NAME
 gkrellkam-list \- format of the list description files used by GKrellKam
 .SH DESCRIPTION
 GKrellKam lists describe a series of \fBimage sources\fP, used in order or at
-random by the GKrellKam plugin.
+random by the GKrellKam plugin. Online lists (downloadable by GKrellKam with
+HTTP) use this same syntax.
 .PP
 Blank lines and comments (beginning with '#') in GKrellKam lists are
 ignored. Every line of text that does not begin with a tab character
@@ -41,14 +42,22 @@ There are also \fBproperties\fP that can be applied to types \fIimage\fP,
 \fIurl\fP, and \fIscript\fP. Properties must follow the \fBimage source\fP
 line that they modify, and must begin with a tab character. These include:
 .PP
-.IP \fItooltip\fP
+.IP \fItooltip\fP [message]
 This sets the message shown when the mouse is kept over the image panel
 in GKrellKam for a few seconds. If not set, the image's filename or URL
 is shown instead.
-.IP \fIseconds\fP
+.IP \fIseconds\fP [num]
 This changes the number of seconds that an image will remain displayed.
 If not set, the "Default number of seconds" set for that panel in the
 GKrellM configuration window will be used.
+.IP \fIrefresh\fP [num]
+If set, this sets the minimum length of time that must elapse before the
+image is re-loaded. If the image cycles up before that time, the old
+image will be used. For \fBscript\fP types, this means that the script
+will not be re-run. For \fBurl\fP types, the image will not be fetched
+using wget. When this property is not set, \fBurl\fP images will be
+downloaded every time they are displayed, and \fBscript\fPs will be run
+every time.
 .PP
 .SH EXAMPLE
 This is a simple example of a GKrellKam list. For a better example, see

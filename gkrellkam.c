@@ -34,11 +34,15 @@
 #include <stdlib.h>
 #include <time.h>
 
+/*
+  Determine gkrellm version- if >= 1.2.0, we can add some extra
+  features. Yippee!
+*/
 #if ((GKRELLM_VERSION_MAJOR == 1) && (GKRELLM_VERSION_MINOR >= 2))
 # define GKRELLM_1_2_0
-# define PLUGIN_VER "0.2.5/s2"
+# define PLUGIN_VER "0.3.0/s2"
 #else
-# define PLUGIN_VER "0.2.5/s1"
+# define PLUGIN_VER "0.3.0/s1"
 #endif
 
 #define PLUGIN_NAME "GKrellKam"
@@ -58,21 +62,19 @@ static gchar *kkam_info_text[] =
 "GKrellKam is a plugin that can watch a number of image files,\n",
 "and display them sized to fit in panels on your gkrellm.\n\n",
 
-"You can ",
-"<b>left-click",
-" on an image panel to start your favorite\n",
-"image viewer and display the original, unsized image, or you\n",
-"can ",
-"<b>middle-click",
-" on it to get an immediate update.\n\n",
+"You can ", "<b>left-click", " on an image panel to display the\n",
+"original, unsized image, or you can ", "<b>middle-click", " on it\n",
+"to get an immediate update.\n\n",
 
 "Scrolling the mouse wheel up over any of the panels increases\n",
 "the number of visible panels, and scrolling it down decreases\n",
-"the number.",
+"the number. This is so you can hide panels you don't always want\n",
+"open."
+
 #ifdef GKRELLM_1_2_0
-" This is compiled for the new GKrellM 1.2.0, so you\ncan also ",
-"<b>right-click",
-" on a panel to open the configuration\nwindow.",
+" Your GKrellKam was compiled for the new GKrellM 1.2.x, so\n",
+"you can also ", "<b>right-click", " on a panel to open the configuration\n",
+"window.",
 #endif
 
 "\n\n",
@@ -92,6 +94,14 @@ static gchar *kkam_info_text[] =
 "favorite image viewer and display the original, unsized image.\n",
 "Put the name of the image viewer program in this box.\n\n",
 
+"<i>Popup errors\n",
+"When something goes wrong with an image download or the parsing\n",
+"of a list, GKrellKam lets you know. When Popup errors is checked,\n",
+"the message will appear as a popup window with an \"OK\" button.\n",
+"When you turn this option off, error messages will be reported\n",
+"in the tooltip for the image in question. They are not very\n",
+"visible this way, but perhaps they are less annoying too.\n\n",
+
 "<i>Number of panels\n",
 "This lets you adjust the number of visible GKrellKam panels\n",
 "between 0 and 5.\n\n",
@@ -102,7 +112,7 @@ static gchar *kkam_info_text[] =
 "After an image has been successfully loaded, GKrellKam will\n",
 "wait this many seconds before updating the image. Updating\n",
 "might involve reloading the same image, or getting the next\n",
-"image in a list. If you right-click on a panel, it will do\n",
+"image in a list. If you middle-click on a panel, it will do\n",
 "the update immediately. This setting can be overridden by\n",
 "specific items in lists.\n\n",
 
@@ -125,14 +135,15 @@ static gchar *kkam_info_text[] =
 "cycled through one by one.\n\n",
 
 "<i>Image Source\n",
-"Each panel has a `source' associated with it. A source can be\n",
+"Each panel has a \"source\" associated with it. A source can be\n",
 "a local picture, the web address of a picture, a list of\n",
 "pictures, or a script to call to get a new picture. To give a\n",
 "local picture file, list of files, or a script, enter the\n",
 "_full_ filename in the \"Image Source\" box. To watch a webcam\n",
-"or other online picture, just put its address (beginning with\n",
-"http:// or ftp://) in the \"Image Source\" box. You'll need\n",
-"GNU wget installed to be able to get pictures from the internet.\n",
+"or other online picture, or use an online list, just put its\n",
+"address (beginning with http:// or ftp://) in the \"Image Source\n",
+"box. Lists should end in \"-list\" or \".list\". You'll need GNU\n",
+"wget installed to be able to get files from the internet.\n",
 "Special case: when this field begins with \"-x\" followed by a\n",
 "space and some more text, the remaining text is assumed to be a\n",
 "script or other system commmand, and the whole path does not\n",
@@ -170,20 +181,19 @@ static const char *default_source[] = {
   ""
 };
 
-static const char *default_viewer = "eeyes";
-
 #define wget_opts "--proxy=off --cache=off"
 #define BUFLEN 256
 #define MIN_NUMPANELS 0
 #define MAX_NUMPANELS 5
 #define MAX_DEPTH 64
-#define MAX_SECONDS 3600
+#define MAX_SECONDS 604800 /* one week */
 
 typedef enum {
   SOURCE_URL,
   SOURCE_FILE,
   SOURCE_SCRIPT,
-  SOURCE_LIST
+  SOURCE_LIST,
+  SOURCE_LISTURL
 } SourceEnum;
 
 /* source information structure- panels each have a GList of these */
@@ -192,8 +202,11 @@ typedef struct
 {
   gchar *img_name;
   gchar *tooltip;
-  int seconds;
   SourceEnum type;
+  int seconds;
+  int next_dl;
+  gchar *tfile;
+  int tlife;
 } KKamSource;
 
 /* items that each panel needs */
@@ -204,10 +217,6 @@ typedef struct
   Decal *decal;
   GdkPixmap *pixmap;
   FILE *cmd_pipe;
-  gchar *imgfname;
-  gboolean delete_when_done;
-  gboolean from_script;
-  gchar *tmpfile;
   int count;
   int height;
   int boundary;
@@ -224,6 +233,9 @@ typedef struct
   GtkWidget *sourcebox;
   GdkImlibImage *imlibim;
 
+  FILE *listurl_pipe;
+  gchar *listurl_file;
+
   gchar *source;
   GList *sources;
 } KKamPanel;
@@ -239,9 +251,11 @@ static Style *img_style = NULL;
 static gint style_id;
 
 static char *viewer_prog = NULL;
+static int popup_errors = 0;
 
 static GtkWidget *viewerbox;
 static GtkWidget *numpanel_spinner = NULL;
+static GtkWidget *popup_errors_box = NULL;
 static GtkWidget *tabs = NULL;
 static GtkWidget *kkam_vbox = NULL;
 static GtkWidget *filebox = NULL;
@@ -250,8 +264,11 @@ static GtkTooltips *tooltipobj;
 
 static void change_num_panels ();
 static void create_sources_list (KKamPanel *p);
+static void kkam_read_list (KKamPanel *p, char *listname, int depth);
 
-static KKamSource empty_source = { "", "No config", 0, SOURCE_FILE };
+static KKamSource empty_source = { "", "No config",
+                                   SOURCE_FILE,
+                                   0, 0, NULL, 0 };
 
 static char *IMG_EXTENSIONS[] = {
   ".jpg",
@@ -269,11 +286,11 @@ static char *IMG_EXTENSIONS[] = {
 /*
   report_error ()
 
-  brings up a message window
+  if popup errors are on, brings up a message window.
+  if not, sets the tooltip text to a warning.
 */
-static void report_error (char *fmt, ...)
+static void report_error (KKamPanel *p, char *fmt, ...)
 {
-  GtkWidget *label, *button, *vbox, *dialog;
   va_list ap;
   char *str;
  
@@ -281,24 +298,72 @@ static void report_error (char *fmt, ...)
   str = g_strdup_vprintf (fmt, ap);
   va_end (ap);
 
-  dialog = gtk_window_new (GTK_WINDOW_DIALOG);
-  vbox = gtk_vbox_new (FALSE, 0);
-  
-  label = gtk_label_new (_("GKrellKam warning:"));
-  gtk_box_pack_start (GTK_BOX (vbox), label, FALSE, FALSE, 0);
-  label = gtk_label_new (str);
-  gtk_box_pack_start (GTK_BOX (vbox), label, FALSE, FALSE, 0);
+  if (popup_errors)
+  {
+    GtkWidget *label, *button, *vbox, *dialog;
 
-  button = gtk_button_new_with_label (_("  OK  "));  
-  gtk_box_pack_start (GTK_BOX (vbox), button, FALSE, FALSE, 0);
-  gtk_container_add (GTK_CONTAINER (dialog), vbox);
+    dialog = gtk_window_new (GTK_WINDOW_DIALOG);
+    vbox = gtk_vbox_new (FALSE, 0);
   
-  gtk_signal_connect_object (GTK_OBJECT (button), "clicked",
-                             GTK_SIGNAL_FUNC (gtk_widget_destroy),
-                             (gpointer)dialog);
+    label = gtk_label_new (_("GKrellKam warning:"));
+    gtk_box_pack_start (GTK_BOX (vbox), label, FALSE, FALSE, 0);
+    label = gtk_label_new (str);
+    gtk_box_pack_start (GTK_BOX (vbox), label, FALSE, FALSE, 0);
+
+    button = gtk_button_new_with_label (_("  OK  "));  
+    gtk_box_pack_start (GTK_BOX (vbox), button, FALSE, FALSE, 0);
+    gtk_container_add (GTK_CONTAINER (dialog), vbox);
   
-  gtk_container_set_border_width (GTK_CONTAINER (dialog), 15);
-  gtk_widget_show_all (dialog);
+    gtk_signal_connect_object (GTK_OBJECT (button), "clicked",
+                               GTK_SIGNAL_FUNC (gtk_widget_destroy),
+                               (gpointer)dialog);
+  
+    gtk_container_set_border_width (GTK_CONTAINER (dialog), 15);
+    gtk_widget_show_all (dialog);
+  }
+  else
+  {
+    if (p && tooltipobj && p->panel && p->panel->drawing_area)
+      gtk_tooltips_set_tip (tooltipobj, p->panel->drawing_area, str, NULL);
+  }
+}
+
+/*
+  destroy_viewer ()
+
+  The delete_event callback for the internal viewer
+*/
+static gint destroy_viewer (GtkWidget *window, GdkEvent *ev, gpointer n)
+{
+  gtk_widget_destroy (window);
+  return FALSE;
+}
+
+/*
+  kkam_internal_viewer ()
+
+  Opens a very simple full-size image viewer window for the image in
+  question. Users can specify an external viewer if they don't like it :)
+*/
+static void kkam_internal_viewer (char *filename)
+{
+  GtkWidget *window, *pmap;
+  GdkPixmap *pix;
+  GdkBitmap *bit;
+
+  if (gdk_imlib_load_file_to_pixmap (filename, &pix, &bit) == 0)
+    return;
+  
+  window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+  gtk_window_set_title (GTK_WINDOW (window), filename);
+  gtk_signal_connect (GTK_OBJECT (window), "delete_event",
+                      GTK_SIGNAL_FUNC (destroy_viewer), NULL);
+
+  pmap = gtk_pixmap_new (pix, bit);
+  gtk_container_add (GTK_CONTAINER (window), pmap);
+  gtk_widget_show_all (window);
+  gdk_imlib_free_pixmap (pix);
+  gdk_imlib_free_pixmap (bit);
 }
 
 /*
@@ -350,6 +415,25 @@ static int get_period (KKamPanel *p)
   if ((per = panel_cursource (p)->seconds) == 0)
     return p->default_period;
   return per;
+}
+
+/*
+  tfile_release ()
+
+  If a kkamsource has been loaded before, and a copy of the image
+  is still attached to it, then unattach that copy. If it is a
+  temporary file, then unlink it as well.
+*/
+static void tfile_release (KKamSource *ks)
+{
+  if (ks == NULL || ks->tfile == NULL)
+    return;
+
+  if (ks->type == SOURCE_URL)
+    unlink (ks->tfile);
+  g_free (ks->tfile);
+  ks->tfile = NULL;
+  ks->next_dl = 0;
 }
 
 /*
@@ -462,33 +546,26 @@ static void start_img_dl (KKamPanel *p)
   tmpfd = mkstemp (tmpfile); /* this will create the file, perm 0600 */
   if (tmpfd == -1)
   {
-    report_error (_("Couldn't create temporary file for download: %s"),
+    report_error (p, _("Couldn't create temporary file for download: %s"),
                   strerror (errno));
     return;
   }
   close (tmpfd);
 
-  g_free (p->tmpfile);
-  p->tmpfile = g_strdup (tmpfile);
-  p->delete_when_done = TRUE;
-  p->from_script = FALSE;
-
-  wget_str = g_strdup_printf ("wget -q %s -O %s %s",
-                              wget_opts,
-                              p->tmpfile,
+  wget_str = g_strdup_printf ("wget -q %s -O %s \"%s\"",
+                              wget_opts, tmpfile,
                               panel_cursource (p)->img_name);
 
   p->cmd_pipe = popen (wget_str, "r");
   g_free (wget_str);
   if (p->cmd_pipe == NULL)
   {
-    unlink (p->tmpfile);
-    g_free (p->tmpfile);
-    p->tmpfile = NULL;
-    p->delete_when_done = FALSE;
-    report_error (_("Couldn't start wget: %s"), strerror (errno));
+    unlink (tmpfile);
+    report_error (p, _("Couldn't start wget: %s"), strerror (errno));
     return;
   }
+  
+  panel_cursource (p)->tfile = g_strdup (tmpfile);
   fcntl (fileno (p->cmd_pipe), F_SETFL, O_NONBLOCK);
 }
 
@@ -504,9 +581,6 @@ static void start_script_dl (KKamPanel *p)
   if (p->cmd_pipe) /* already open */
     return;
 
-  p->delete_when_done = FALSE;
-  p->from_script = TRUE;
-
   scriptname = panel_cursource (p)->img_name;
   if (!strncmp (scriptname, "-x", 2))
     scriptname += 2;
@@ -514,8 +588,7 @@ static void start_script_dl (KKamPanel *p)
   p->cmd_pipe = popen (scriptname, "r");
   if (p->cmd_pipe == NULL)
   {
-    p->from_script = FALSE;
-    report_error (_("Couldn't start script \"%s\": %s\n"),
+    report_error (p, _("Couldn't start script \"%s\": %s\n"),
                   panel_cursource (p)->img_name, strerror (errno));
     return;
   }
@@ -525,39 +598,44 @@ static void start_script_dl (KKamPanel *p)
 /*
   load_image_file ()
 
-  If the file newname exists, loads it into p's imlibim member,
-  and updates p->imgfname (deleting old file if appropriate).
-  Calls draw_imlibim. Also, sets image tooltip.
+  If the file in p's cursource exists, loads it into p's imlibim
+  member. Calls draw_imlibim. Also, sets image tooltip.
+
+  Returns -1 on file missing, and 1 otherwise (not necessarily
+    success, but probably)
 */
-static void load_image_file (KKamPanel *p, char *newname)
+static int load_image_file (KKamPanel *p)
 {
   struct stat img_st;
   KKamSource *ks;
 
+  ks = panel_cursource (p);
+
   /* make sure file is really there. when the imlib stuff
      fails it's really loud */
-  if (stat (newname, &img_st) == -1)
-    return;
+  if (ks->tfile == NULL || stat (ks->tfile, &img_st) == -1)
+  {
+    ks->next_dl = 0;
+    return -1;
+  }
   
-  p->imgfname = g_strdup (newname);
-
   if (p->imlibim)    
     gdk_imlib_kill_image (p->imlibim);
-  p->imlibim = gdk_imlib_load_image (p->imgfname);
+  p->imlibim = gdk_imlib_load_image (ks->tfile);
   draw_imlibim (p);  
-  p->count = get_period (p);
 
-  ks = panel_cursource (p);
   if (ks->tooltip)
     gtk_tooltips_set_tip (tooltipobj, p->panel->drawing_area,
-                          panel_cursource (p)->tooltip, NULL);
+                          ks->tooltip, NULL);
   else
     gtk_tooltips_set_tip (tooltipobj, p->panel->drawing_area,
-                          panel_cursource (p)->img_name, NULL);
+                          ks->img_name, NULL);
+
+  return 1;
 }
 
 /*
-  cmd_results (char *fname)
+  cmd_results ()
 
   Checks if the command pipe is dead yet. If so, checks its output
   status and returns 1 if the command was successful.
@@ -568,6 +646,9 @@ static int cmd_results (KKamPanel *p)
 {
   int code, len;
   char buf[BUFLEN];
+  KKamSource *ks;
+
+  ks = panel_cursource (p);
 
   if (fread (buf, sizeof (char), 1, p->cmd_pipe) < 1)
   {
@@ -578,32 +659,41 @@ static int cmd_results (KKamPanel *p)
     /* if we reach here the pipe is dead- the command has finished. */
     code = pclose (p->cmd_pipe);
     p->cmd_pipe = NULL;
-    if (p->from_script == FALSE && code == 0) /* success for wget */
+
+    /* pclose will return a -1 on a wait4 error. If that happens,
+       we have no way to know whether wget succeeded. Just try */
+    if (ks->type == SOURCE_URL && code <= 0)
     {
-      load_image_file (p, p->tmpfile);
-      g_free (p->tmpfile);
-      p->tmpfile = NULL;
+      ks->next_dl = time (NULL) + ks->tlife;
+      load_image_file (p);
       return 1;
     }
-    else
-      return -1;
+
+    report_error (p, _("Error: wget gave bad code or script died. code %d"),
+                  code);
   }
   
-  if (p->from_script)
+  len = fread (&buf[1], sizeof (char), BUFLEN - 2, p->cmd_pipe);
+  buf[len + 1] = '\0';
+  g_strstrip (buf);
+  
+  if (ks->type == SOURCE_SCRIPT)
   {
-    len = fread (&buf[1], sizeof (char), BUFLEN - 2, p->cmd_pipe);
-    if (len >= 0)
-      buf[len + 1] = '\0';
-    g_strstrip (buf);
-    load_image_file (p, buf);
+    ks->tfile = g_strdup (buf);
+    ks->next_dl = time (NULL) + ks->tlife;
+    load_image_file (p);
+    return 1;
   }
-
-  /* if we get here with wget, then wget said something. This is generally
-     not good, since we passed -q. We'll have to wait for it to die */
+  else
+  {
+    /* if we get here with wget, then wget said something. This is generally
+       not good, since we passed -q. We'll have to wait for it to die */
     
-  pclose (p->cmd_pipe);
-  p->cmd_pipe = NULL;
-  return -1;
+    report_error (p, _("wget said: \"%s\""), buf);
+    pclose (p->cmd_pipe);
+    p->cmd_pipe = NULL;
+    return -1;
+  }
 }
 
 /*
@@ -639,33 +729,79 @@ static void update_image (KKamPanel *p)
 {
   KKamSource *ks;
   
-  ks = panel_cursource (p);
-  if (ks->img_name == NULL)
-    return;
-  
-  if (p->imgfname)
-  {
-    if (p->delete_when_done)
-      unlink (p->imgfname);
-    g_free (p->imgfname);
-    p->imgfname = NULL;
-  }
-  p->delete_when_done = FALSE;
+  p->count = get_period (p);
 
-  switch (ks->type)
+  ks = panel_cursource (p);
+  if (ks->img_name == NULL || ks->img_name[0] == '\0')
+    return;
+ 
+  if (ks->next_dl > time (NULL))
+    load_image_file (p);
+  else
   {
-  case SOURCE_SCRIPT:
-    start_script_dl (p);
-    break;
-  case SOURCE_URL:
-    start_img_dl (p);
-    break;
-  case SOURCE_FILE:
-    load_image_file (p, ks->img_name);
-    break;
-  default:
-    report_error (_("Invalid type %d found in sources list!"), ks->type);
+    tfile_release (ks);
+
+    switch (ks->type)
+    {
+    case SOURCE_SCRIPT:
+      start_script_dl (p);
+      break;
+    case SOURCE_URL:
+      start_img_dl (p);
+      break;
+    case SOURCE_FILE:
+      ks->tfile = g_strdup (ks->img_name);
+      ks->next_dl = 0; /* next_dl is meaningless for SOURCE_FILE */
+      load_image_file (p);
+      break;
+    default:
+      report_error (p, _("Invalid type %d found in sources list!"), ks->type);
+    }
   }
+}
+
+/*
+  listurl_results ()
+
+  when the listurl download is finished, reads the list and deletes it.
+  Returns 0 if still waiting, 1 on success or error.
+*/
+static int listurl_results (KKamPanel *p)
+{
+  int code;
+  char c;
+  KKamSource *ks;
+
+  ks = panel_cursource (p);
+
+  if (fread (&c, sizeof (char), 1, p->listurl_pipe) < 1)
+  {
+    /* if we get EAGAIN, wait some more */
+    if (ferror (p->listurl_pipe) && errno == EAGAIN)
+      return 0;
+
+    /* if we reach here the pipe is dead- the command has finished. */
+    code = pclose (p->listurl_pipe);
+    p->listurl_pipe = NULL;
+  }
+  else
+    code = 256;
+
+  /* pclose will return a -1 on a wait4 error. If that happens,
+     we have no way to know whether wget succeeded. Just try */
+  if (code <= 0)
+  {
+    kkam_read_list (p, p->listurl_file, 0);
+    update_image (p);
+  }
+  else
+    report_error (p, _("Error: wget listurl download died. code %d"), code);
+
+  unlink (p->listurl_file);
+  g_free (p->listurl_file);
+  p->listurl_file = NULL;
+
+  return 1;
 }
 
 /*
@@ -681,7 +817,9 @@ static void kkam_update_plugin ()
   if (GK.second_tick)
     for (i = 0; i < numpanels; i++)
     {
-      if (panels[i].cmd_pipe)
+      if (panels[i].listurl_pipe)
+        listurl_results (&panels[i]);
+      else if (panels[i].cmd_pipe)
         cmd_results (&panels[i]);
       else if (--panels[i].count <= 0)
       {
@@ -698,33 +836,42 @@ void showsource (KKamSource *s)
 }
 
 /*
-  show_curimage ()
+  click_callback ()
 
   launches eeyes, or whatever viewer the user has configured, to
   display the unscaled version of the image (looking where
   we loaded it). If the user right-clicked, get a fresh image.
 */
-static gint show_curimage (GtkWidget *widget, GdkEventButton *ev, gpointer gw)
+static gint click_callback (GtkWidget *widget, GdkEventButton *ev, gpointer gw)
 {
   gchar *cmd;
   int which;
+  KKamSource *ks;
  
   which = GPOINTER_TO_INT (gw);
   if (!activenum (which))
     return FALSE;
   
+  ks = panel_cursource (&panels[which]);
+
   switch (ev->button)
   {
   case 1: /* view image */
-    if (panels[which].imgfname)
+    if (ks->tfile)
     {
-      cmd = g_strdup_printf ("%s '%s' &", viewer_prog, panels[which].imgfname);
-      system (cmd);
-      g_free (cmd);
+      if (viewer_prog == NULL || viewer_prog[0] == '\0')
+        kkam_internal_viewer (ks->tfile);
+      else
+      {
+        cmd = g_strdup_printf ("%s '%s' &", viewer_prog, ks->tfile);
+        system (cmd);
+        g_free (cmd);
+      }
     }
     break;
   case 2: /* immediate update */
     panels[which].count = 0;
+    ks->next_dl = 0;
     break;
 
 #ifdef GKRELLM_1_2_0
@@ -1020,9 +1167,6 @@ static void kkam_create_plugin (GtkWidget *vbox, gint first_create)
     for (i = 0; i < MAX_NUMPANELS; i++)
       panels[i].panel = gkrellm_panel_new0 ();
 
-    if (viewer_prog == NULL)
-      viewer_prog = g_strdup (default_viewer);
-
     tooltipobj = gtk_tooltips_new ();
     gtk_tooltips_set_delay (tooltipobj, 1000);
 
@@ -1067,7 +1211,7 @@ static void kkam_create_plugin (GtkWidget *vbox, gint first_create)
             "expose_event", GTK_SIGNAL_FUNC (panel_expose_event),
             GINT_TO_POINTER (i));
       gtk_signal_connect (GTK_OBJECT (panels[i].panel->drawing_area),
-            "button_press_event", GTK_SIGNAL_FUNC (show_curimage),
+            "button_press_event", GTK_SIGNAL_FUNC (click_callback),
             GINT_TO_POINTER (i));
             
       gkrellm_draw_layers (panels[i].panel);
@@ -1093,6 +1237,8 @@ static KKamSource *kkam_source_new ()
 
 static void kkam_source_free (KKamSource *ks)
 {
+  if (ks->tfile)
+    tfile_release (ks);
   g_free (ks->img_name);
   g_free (ks->tooltip);
   g_free (ks);
@@ -1119,6 +1265,8 @@ static KKamSource *addto_sources_list (KKamPanel *p, char *name, SourceEnum type
   ks = kkam_source_new ();
   ks->type = type;
   ks->img_name = g_strdup (name);
+  ks->tfile = NULL;
+  ks->next_dl = 0;
   p->sources = g_list_append (p->sources, (gpointer)ks);
 
   return ks;
@@ -1144,12 +1292,14 @@ static gboolean endswith (char *str, char *endstr)
   determines what type of source is represented by the given
   string, according to these rules, checked in order:
 
+  - A source beginning with 'http:' or 'ftp:' and ending in '.list'
+     is a SOURCE_LISTURL.
   - A source beginning with 'http:' or 'ftp:' is a SOURCE_URL.
   - A source that begins with '-x' is a SOURCE_SCRIPT.
   - A source with an extension in IMG_EXTENSIONS is a SOURCE_FILE.
   - A source that matches a filename that is executable by the user is
      a SOURCE_SCRIPT.
-  - A source ending in .list is a SOURCE_LIST.
+  - A source ending in [.-]list is a SOURCE_LIST.
   - If none of the above apply, and the source is a filename, the
      file is opened. If it 'looks' like a GKrellKam list configuration
      file, it is a SOURCE_LIST.
@@ -1170,6 +1320,12 @@ static SourceEnum source_type_of (char *def)
 
   if (!strncmp (words[0], "http:", 5) || !strncmp (words[0], "ftp:", 4))
   {
+    if (endswith (words[0], ".list") || endswith (words[0], "-list"))
+    {
+      g_strfreev (words);
+      return SOURCE_LISTURL;
+    }
+
     g_strfreev (words);
     return SOURCE_URL;
   }
@@ -1191,7 +1347,7 @@ static SourceEnum source_type_of (char *def)
     g_strfreev (words);
     return SOURCE_SCRIPT;
   }
-  if (endswith (words[0], ".list"))
+  if (endswith (words[0], ".list") || endswith (words[0], "-list"))
   {
     g_strfreev (words);
     return SOURCE_LIST;
@@ -1248,7 +1404,7 @@ static void kkam_read_list (KKamPanel *p, char *listname, int depth)
 
   if (depth > MAX_DEPTH)
   {
-    report_error (_("Maximum recursion depth exceeded reading list %s; "
+    report_error (p, _("Maximum recursion depth exceeded reading list %s; "
                   "perhaps a list is trying to load itself?"), listname);
     return;
   }
@@ -1274,11 +1430,13 @@ static void kkam_read_list (KKamPanel *p, char *listname, int depth)
           ks->tooltip = g_strdup (nextword (&buf[1]));
         else if (!strncmp (&buf[1], "seconds:", 8))
           ks->seconds = CLAMP (atoi (nextword (&buf[1])), 1, MAX_SECONDS);
+        else if (!strncmp (&buf[1], "refresh:", 8))
+          ks->tlife = CLAMP (atoi (nextword (&buf[1])), 1, MAX_SECONDS);
       }
       else if (thislist_error == 0) /* only show one error per file */
       {
         thislist_error = 1;
-        report_error (_("In list %s, property line \"%s\" isn't associated"
+        report_error (p, _("In list %s, property line \"%s\" isn't associated"
                            " with any source!"), listname, &buf[1]);
       }
       break;
@@ -1304,10 +1462,48 @@ static void kkam_read_list (KKamPanel *p, char *listname, int depth)
           ks = NULL;
         }
         else
-          ks = addto_sources_list (p, buf, source_type_of (buf));
+          ks = addto_sources_list (p, buf, typ);
       }
     }
   }
+}
+
+static void kkam_read_listurl (KKamPanel *p, char *source)
+{
+  gchar *wget_str;
+  char tmpfile[] = TEMPTEMPLATE "-urllistXXXXXX";
+  int tmpfd;
+
+  if (p->listurl_pipe) /* already open */
+    return;
+
+  tmpfd = mkstemp (tmpfile); /* this will create the file, perm 0600 */
+  if (tmpfd == -1)
+  {
+    report_error (p, _("Couldn't create temporary file for list download: %s"),
+                  strerror (errno));
+    return;
+  }
+  close (tmpfd);
+
+  wget_str = g_strdup_printf ("wget -q %s -O %s \"%s\"",
+                              wget_opts, tmpfile, source);
+
+  p->listurl_pipe = popen (wget_str, "r");
+  g_free (wget_str);
+  if (p->listurl_pipe == NULL)
+  {
+    unlink (tmpfile);
+    report_error (p, _("Couldn't start wget for list download: %s"),
+                  strerror (errno));
+    return;
+  }
+  
+  p->listurl_file = g_strdup (tmpfile);
+  fcntl (fileno (p->listurl_pipe), F_SETFL, O_NONBLOCK);
+
+  gtk_tooltips_set_tip (tooltipobj, p->panel->drawing_area,
+                        _("Downloading list.."), NULL);
 }
 
 /*
@@ -1336,6 +1532,9 @@ static void create_sources_list (KKamPanel *p)
       break;
     case SOURCE_LIST:
       kkam_read_list (p, p->source, 0);
+      break;
+    case SOURCE_LISTURL:
+      kkam_read_listurl (p, p->source);
       break;
     }
   }
@@ -1427,7 +1626,10 @@ static void kkam_save_config (FILE *f)
 {
   int i;
 
-  fprintf (f, "%s viewer_prog %s\n", PLUGIN_KEYWORD, viewer_prog);
+  if (viewer_prog && viewer_prog[0])
+    fprintf (f, "%s viewer_prog %s\n", PLUGIN_KEYWORD, viewer_prog);
+
+  fprintf (f, "%s popup_errors %d\n", PLUGIN_KEYWORD, popup_errors);
   fprintf (f, "%s numpanels %d\n", PLUGIN_KEYWORD, numpanels);
 
   for (i = 0; i < MAX_NUMPANELS; i++)
@@ -1497,6 +1699,10 @@ static void kkam_load_config (gchar *arg)
   {
     g_free (viewer_prog);
     viewer_prog = g_strdup (value);
+  }
+  else if (!strcmp (config_item, "popup_errors"))
+  {
+    popup_errors = atoi (value);
   }
   else if (!strcmp (config_item, "numpanels"))
   {
@@ -1573,7 +1779,8 @@ static void kkam_create_tab (GtkWidget *tab_vbox)
   
   hbox = gtk_hbox_new (FALSE, 0);
   viewerbox = gtk_entry_new ();
-  gtk_entry_set_text (GTK_ENTRY (viewerbox), viewer_prog);
+  if (viewer_prog)
+    gtk_entry_set_text (GTK_ENTRY (viewerbox), viewer_prog);
   gtk_entry_set_editable (GTK_ENTRY (viewerbox), TRUE);
 
   gtk_box_pack_start (GTK_BOX (hbox),
@@ -1582,6 +1789,13 @@ static void kkam_create_tab (GtkWidget *tab_vbox)
   gtk_box_pack_start (GTK_BOX (hbox), viewerbox, FALSE, FALSE, 0);
   gtk_box_pack_start (GTK_BOX (vbox), hbox, TRUE, FALSE, 0);
   
+  hbox = gtk_hbox_new (FALSE, 0);
+  popup_errors_box = gtk_check_button_new_with_label (_("Popup errors"));
+  gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (popup_errors_box),
+                                popup_errors);
+  gtk_box_pack_start (GTK_BOX (hbox), popup_errors_box, FALSE, FALSE, 10);
+  gtk_box_pack_start (GTK_BOX (vbox), hbox, TRUE, FALSE, 0);
+
   numadj = (GtkAdjustment *) gtk_adjustment_new ((gfloat) numpanels,
                              (gfloat) MIN_NUMPANELS,
                              (gfloat) MAX_NUMPANELS,
@@ -1659,6 +1873,17 @@ static void kkam_apply_config ()
     g_free (viewer_prog);
   viewer_prog = g_strdup
                    (gtk_editable_get_chars (GTK_EDITABLE (viewerbox), 0, -1));
+
+  popup_errors = gtk_toggle_button_get_active
+                                       (GTK_TOGGLE_BUTTON (popup_errors_box));
+}
+
+void kkam_cleanup ()
+{
+  int i;
+
+  for (i = 0; i < MAX_NUMPANELS; i++)
+    destroy_sources_list (&panels[i]);
 }
 
 static Monitor kam_mon  =
@@ -1686,10 +1911,7 @@ static Monitor kam_mon  =
 Monitor *init_plugin ()
 {
   int i;
-  char rmcmd[] = "rm -f " TEMPTEMPLATE "*";
   
-  system (rmcmd);
-
   style_id = gkrellm_add_meter_style (&kam_mon, PLUGIN_STYLE);
   panels = g_new0 (KKamPanel, MAX_NUMPANELS);
   
@@ -1703,6 +1925,9 @@ Monitor *init_plugin ()
     panels[i].default_period = 60;
   }
 
+  /* gkrellm now hooks INT and QUIT and exits nicely. This will work. */
+
+  g_atexit (kkam_cleanup);
+ 
   return (monitor = &kam_mon);
 }
-

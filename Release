@@ -1,22 +1,10 @@
-Notes for GKrellKam version 0.2.5:
+Notes for GKrellKam version 0.3.0:
 
-As of 0.2.3, krellkam_load is no longer required. Its functionality is
-now built into the GKrellKam plugin. This allows (or will allow) for
-more interesting lists of sources for each panel. An included manpage,
-gkrellkam-list(5), describes the new list format. The old list format
-should still work fine- although GKrellKam will not physically rotate
-the list anymore, or even modify the file.
-
-See the Info tab for GKrellKam in the GKrellM configuration window for
-help setting up your panels.
-
-As of 0.2.4, the new capabilities of GKrellM 1.2.x can be utilized
-(configuration accessible via right-click). The code can still be
-compiled fine with GKrellM 1.0.x headers too.
-
-0.2.5 fixes some annoying defaults for beginning users of gkrellkam.
-In addition, any /tmp/krellkam* files left over from the last time
-gkrellm was run are deleted. The plugin can't tell when gkrellm is
-dying, so it can't delete them at the time.
-
-Look for online list capability in the next feature release.
+* Doesn't keep trying repeatedly if a download fails
+* Quotes URLs in wget command so that ampersands, etc work
+* Manages temporary files sanely
+* Includes code for an extremely basic image viewer
+* Recognizes the "refresh" tag in lists, to enable cycling
+  images more than once without redownloading
+* Now lets you give a URL to an online list in the Image
+  Source box

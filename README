@@ -37,9 +37,10 @@ single image, or cycle through a list of images, or run a script and use the
 output of the script as the filename of an image. GKrellKam even knows how to
 get images out on the internet- this is what allows you to watch webcams.
 
-This release (0.2.3) removes the necessity of the krellkam_load script- all
-its functionality is provided in the plugin itself. This allows more complex
-and interesting lists to be compiled of the panels' image sources. For more
+GKrellKam allows lists to be compiled of image sources for the different
+panels. Panels with lists cycle through the different sources. You can
+specify local files as lists, or give a URL to an online one. Online lists
+have the same syntax. All lists should end in ".list" or "-list". For more
 information, see the plugin's Info text, and the included gkrellkam-list(5)
 manpage.
 
