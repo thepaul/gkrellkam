@@ -2,6 +2,8 @@
 #
 # krellkam_load - rotates a list of images and URLs in ~/.krellkam.list
 #
+# VERSION - 0.2.2
+#
 # Copyright (C) 2001 paul cannon
 # space software lab/utah state university
 # paul@cannon.cs.usu.edu
@@ -13,6 +15,7 @@
 function usage()
 {
   cat << US_END
+krellkam_load 0.2.2 (Used with the GKrellKam plugin)
 
 USAGE:
 
@@ -45,8 +48,9 @@ function die()
 }
 
 PICS_LIST=$HOME/.krellkam.list
-FILELOC=$HOME/.krellkam.jpg
+TMPFILEDIR=$HOME/.gkrellm/data/gkrellkam
 WGET="wget -q"
+LOCK="/tmp/krellkam.lock"
 
 thispic=""
 pick_rand=0
@@ -66,12 +70,14 @@ while [ -n "$1" ]; do
   shift
 done
 
-# check the list
-test -r $PICS_LIST || die "Can't open listfile $PICS_LIST."
-numpics=`cat $PICS_LIST | wc -l`
-test $numpics -gt 0 || die "Listfile $PICS_LIST is empty."
-
 if [ -z $thispic ]; then
+  # check the list
+  test -r $PICS_LIST || die "Can't open listfile $PICS_LIST."
+  numpics=`cat $PICS_LIST | wc -l`
+  test $numpics -gt 0 || die "Listfile $PICS_LIST is empty."
+
+  lockfile -1 $LOCK
+
   if [ $pick_rand == 1 ]; then
     # pick a random line from the file
 
@@ -79,7 +85,7 @@ if [ -z $thispic ]; then
     thispic=`head -$num $PICS_LIST | tail -1`
   else
     # rotate the list; first line goes to bottom
-    TMPLOC=`mktemp /tmp/krellkam.XXXXXX`
+    TMPLOC=`mktemp /tmp/krellkam.list.XXXXXX`
 
     # remember the first line
     thispic=`head -1 $PICS_LIST`
@@ -90,17 +96,29 @@ if [ -z $thispic ]; then
     echo $thispic >> $TMPLOC
     mv $TMPLOC $PICS_LIST
   fi
+
+  rm -f $LOCK
 fi
 
 # determine if URL or local file
 if echo $thispic | grep "://" > /dev/null; then
-	
-  # Load URL..
-  $WGET -O $FILELOC $thispic
-  echo $FILELOC
-	
+
+  # Load URL. First convert it to a name suitable for a filename..
+
+  FILELOC=$(echo $thispic | sed -e "y/:\/%\!\`*?/--------/")
+
+  # Make sure a directory is where we want it..
+
+  test -d $TMPFILEDIR || mkdir -p $TMPFILEDIR
+
+  # download.
+
+  FILEPATH=$TMPFILEDIR/$FILELOC
+  $WGET -O $FILEPATH $thispic
+  echo $FILEPATH
+
 else
-	
+
   # Local image file..
   echo $thispic
 

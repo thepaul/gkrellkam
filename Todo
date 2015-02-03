@@ -1,8 +1,10 @@
 Planned updates-
 
-- support multiple panes, with separate configurations
 - add shading to image to match a gkrellm or desktop theme
-- make a moon clock that can be cycled with other views
-  (internal view- access with "internal:moonclock" as filename)
-- add earth clock (shaded in nighttime areas) as another internal view
-  ("internal:earthclock" for filename)
+- tooltip info, as optionally supplied by script
+- more interesting scripts
+- panel config boxes to accept URLs, filenames of lists and pictures
+    as well as the scripts now present
+- before an image is loaded, put a theme-compliant background in the
+    panel instead of a blank box
+

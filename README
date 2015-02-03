@@ -26,28 +26,24 @@ before..).
 See the file INSTALL for the simplistic install instructions.
 ------------------------------------------------------------------
 
-I wrote GKrellKam because there's a webcam pointing at the
-building where I work, and I thought it would be nice to see what
-the weather was like outside without taking up much space on the
-desktop. GKrellWeather is great, but this is a little more.. well,
-graphic.
+I wrote GKrellKam because there's a webcam pointing at the building where I
+work, and I thought it would be nice to see what the weather was like outside
+without taking up much space on the desktop. GKrellWeather is great, but this
+is a little more.. well, graphic.
 
-The idea is that you can have a periodically updated image of
-whatever you want, albeit squeezed into a little gkrellm panel.
-A script or program is run by the plugin every N minutes. All it
-needs to do is output the name of a file and exit. Once GKrellKam
-knows where the file is, it will load it (in any format supported
-by imlib) and scale it down to fit in the panel. I have my script
-fetch a static webcam image using wget, but you could do
-anything. Someone could use it to rotate pictures of people or
-things or cartoon characters on her gkrellm. I don't know.
+The idea is that you can have a periodically updated image of whatever you
+want, albeit squeezed into a little gkrellm panel. A script or program is run
+by the plugin every N minutes. All it needs to do is output the name of a
+file and exit. Once GKrellKam knows where the file is, it will load it (in
+any format supported by imlib) and scale it down to fit in the panel. The
+default script, krellkam_load, rotates a list of local images and remote
+images, downloading the remote ones into a certain location.. but you could
+make scripts to do anything.
 
-The truth is, I find it a little hard to believe this will be of
-any use whatsoever to anyone besides me. If it is, great, and
-feel free to email me and tell me what you use it for. Oh, and
-bug reports would be helpful. I think this should be pretty bug-
-free, but then I haven't tested it under extreme conditions or
-on any other platforms.
+This new version of GKrellKam can do multiple panels at the same time. I
+thought that would be a nice feature from quite early on, but it took a lot
+more rewriting than I thought it would! Regardless, the capability is now
+there and hopefully bug-free. Bug reports, if you find anything wrong, will
+be quite helpful.
 
-See http://ssl.usu.edu/paul/gkrellkam/ for more info.
-
+See http://gkrellkam.sourceforge.net/ for more info.

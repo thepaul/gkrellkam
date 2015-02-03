@@ -1,6 +1,12 @@
 GKrellKam Changelog
 -------------------
 
+0.2.0 - Jun 20, 2001
+  * Added capability to display multiple panels, with separate
+    configs
+  * Made krellkam_load reentrant and a little smarter wrt saving
+    local copies of remote images
+
 0.1.1d - Jun 7, 2001
   * Bugfix; GTK methodological error made config tabs mess up on some
     systems
