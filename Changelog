@@ -1,6 +1,13 @@
 GKrellKam Changelog
 -------------------
 
+0.2.4 - Sep 11, 2001
+  * I've had code to take advantage of the new GKrellm 1.2.0
+    features for some time, and now I'm giving it out :)
+  * Mouse scroll wheel now increases or lowers the number of
+    visible panels
+  * Minor bugfixes
+
 0.2.3b - Jul 31, 2001
   * Fixed bug that deleted local image files under some
     conditions! Big thanks to Justin Morrison

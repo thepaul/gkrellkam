@@ -1,13 +1,17 @@
-Notes for GKrellKam version 0.2.3b:
+Notes for GKrellKam version 0.2.4:
 
-krellkam_load is no longer required. Its functionality is now built into
-the GKrellKam plugin. This allows (or will allow) for more interesting
-lists of sources for each panel. An included manpage, gkrellkam-list(5),
-describes the new list format. The old list format should still work fine-
-although GKrellKam will not physically rotate the list anymore, or even
-modify the file.
+As of 0.2.3, krellkam_load is no longer required. Its functionality is
+now built into the GKrellKam plugin. This allows (or will allow) for
+more interesting lists of sources for each panel. An included manpage,
+gkrellkam-list(5), describes the new list format. The old list format
+should still work fine- although GKrellKam will not physically rotate
+the list anymore, or even modify the file.
 
 See the Info tab for GKrellKam in the GKrellM configuration window for
 help setting up your panels.
 
-0.2.3b is a bugfix to 0.2.3 to stop deleting local image files.
+As of 0.2.4, the new capabilities of GKrellM 1.2.x can be utilized
+(configuration accessible via right-click). The code can still be
+compiled fine with GKrellM 1.0.x headers too.
+
+Look for online list capability in the next release.
