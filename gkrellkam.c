@@ -32,7 +32,7 @@
 #include <errno.h>
 
 #define PLUGIN_NAME "GKrellKam"
-#define PLUGIN_VER "0.2.2b"
+#define PLUGIN_VER "0.2.2d"
 #define PLUGIN_DESC "GKrellM Image Watcher plugin"
 #define PLUGIN_URL "http://gkrellkam.sourceforge.net/"
 #define PLUGIN_STYLE PLUGIN_NAME

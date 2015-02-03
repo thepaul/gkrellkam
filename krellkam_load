@@ -2,7 +2,7 @@
 #
 # krellkam_load - rotates a list of images and URLs
 #
-# VERSION - 0.3.0
+# VERSION - 0.3.2
 #
 # Copyright (C) 2001 paul cannon
 # space software lab/utah state university
@@ -53,7 +53,7 @@ US_END
 
 $list = $ENV{'HOME'}.'/.krellkam.list';
 $cachedir = $ENV{'HOME'}.'/.gkrellm/data/gkrellkam';
-$wget = 'wget -q';
+$wget = 'wget';
 $wgetopts = '--cache=off --proxy=off';
 $exec_prog = '';
 $thispic = '';
@@ -167,7 +167,7 @@ if ($thispic eq "") {
   close LISTFILE;
 }
 
-$thispic =~ s/\n*$/\n/;  # ensure exactly one newline at end
+$thispic =~ s/\n*$//;       # remove newlines at end
 
 if (isurl ($thispic)) {
 
@@ -175,16 +175,16 @@ if (isurl ($thispic)) {
   ($localname = $thispic) =~ tr[:/%!\\"`'$*?&=]/-/;
 
   # Make sure a directory is where we want it..
-  mkdir $cachedir;
+  mkdir $cachedir,0777;
 
   # download.
-  system ("$wget $wgetopts -O \"$cachedir/$localname\" \"$thispic\"") or
-            die "Couldn't start $wget";
-  print "$cachedir/$localname";
+  $cmdstr = "$wget -q $wgetopts -O \"$cachedir/$localname\" $thispic";
+  (system ($cmdstr) != -1) or die "Couldn't run $cmdstr";
+  print "$cachedir/$localname\n";
 
 } else {
 
   # Local image file..
-  print $thispic;
+  print "$thispic\n";
 
 }

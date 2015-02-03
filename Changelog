@@ -1,6 +1,16 @@
 GKrellKam Changelog
 -------------------
 
+0.2.2d - Jul 16, 2001
+  * Further minor bugfixes to krellkam_load- wasn't working
+    like I expected!
+
+0.2.2c - Jul 16, 2001
+  * Minor bugfix to krellkam_load for older Perls that need
+    two parameters to mkdir. Gave default mode (0777) for
+    directory; this is further restricted by a user's umask,
+    so it's not a security issue.
+
 0.2.2b - Jul 13, 2001
   * Uses krellkam_load automatically now for all images- user only
     has to specify parameters to it. This means they can just put
