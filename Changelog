@@ -1,6 +1,20 @@
 GKrellKam Changelog
 -------------------
 
+0.2.1 - Jul 11, 2001
+  * Added option to have each image maintain its aspect ratio
+    (Thanks to Benjamin Johnson <benj@visi.com>)
+  * Added option to have a border around each image
+
+0.2.0c - Jun 26, 2001
+  * Fixed krellkam_load to correctly handle webcam addresses with
+    ampersands (&) and weird characters in them
+
+0.2.0b - Jun 23, 2001
+  * Fixed panel initialization so that panels match gkrellm theme
+    before images are loaded into them (Thanks to Bill Wilson for
+    sleuthing out the problem)
+
 0.2.0 - Jun 20, 2001
   * Added capability to display multiple panels, with separate
     configs
