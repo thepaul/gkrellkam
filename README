@@ -32,27 +32,24 @@ without taking up much space on the desktop. GKrellWeather is great, but this
 is a little more.. well, graphic.
 
 The idea is that you can have a periodically updated image of whatever you
-want, albeit squeezed into a little gkrellm panel. A script or program is run
-by the plugin every N minutes. All it needs to do is output the name of a
-file and exit. Once GKrellKam knows where the file is, it will load it (in
-any format supported by imlib) and scale it down to fit in the panel. The
-default script, krellkam_load, rotates a list of local images and remote
-images, downloading the remote ones into a certain location.. but you could
-make scripts to do anything.
+want, albeit squeezed into a little gkrellm panel. Each panel can watch a
+single image, or cycle through a list of images, or run a script and use the
+output of the script as the filename of an image. GKrellKam even knows how to
+get images out on the internet- this is what allows you to watch webcams.
 
-The script krellkam_load has been rewritten in Perl for this release. It has
-a few new features- you can give it a file on the command line without any
-options, and it will determine whether it's a web address, list of pictures,
-local image file, or a script, and do the Right Thing with it. This is in
-preparation for some changes in future releases.
+This release (0.2.3) removes the necessity of the krellkam_load script- all
+its functionality is provided in the plugin itself. This allows more complex
+and interesting lists to be compiled of the panels' image sources. For more
+information, see the plugin's Info text, and the included gkrellkam-list(5)
+manpage.
 
-GKrellKam can do multiple image panels at the same time, with individual
-configurations. I thought that would be a nice feature from quite early on,
-but it took a lot more rewriting than I thought it would! Regardless, the
-capability is now there and hopefully bug-free. Bug reports, if you find
-anything wrong, will be quite helpful.
+If you don't want to mess around with all that, just put the address of a
+webcam in the 'Image Source' configuration box, set the number of seconds
+for each update, and GKrellKam will do the rest.
 
 Thanks to Benjamin Johnson (benj@visi.com) for some of the image scaling
 code.
 
-See http://gkrellkam.sourceforge.net/ for more info.
+See http://gkrellkam.sourceforge.net/ for more up-to-date info on this
+project. Bug reports, feature suggestions, and patches are welcome, if not
+always addressed.

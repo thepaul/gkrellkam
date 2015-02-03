@@ -1,36 +1,18 @@
 INSTALLING THE PLUGIN
 
-To install, you'll just need to compile the plugin and place it 
-(gkrellkam.so) into your gkrellm plugins directory- probably
-$HOME/.gkrellm/plugins or the systemwide plugin directory.
-
 Compile using:
 
 $ make
 
-If you want the plugin in your own .gkrellm directory, and it is at
-$HOME/.gkrellm/plugins, you can install using
+If you want the plugin in your own .gkrellm directory, and not in
+the systemwide directory, you can install using
 
-$ make install
+$ make userinstall
 
-INSTALLING THE SCRIPT
+To install the plugin for everyone on the system, do (as root)
 
-GKrellKam needs the krellkam_load script, included with this distribution.
-Beginning with this release (0.2.2b), krellkam_load MUST be somewhere in
-your path, or GKrellKam won't work. GNU wget must also be in your path.
-If you are the system administrator, making this plugin available for
-everyone, it is suggested you put krellkam_load in /usr/bin. If you are
-just installing the plugin for your own use, a good place would be in
-your ~/bin directory. If you don't have one, you should make one- it is
-a convenient sort of thing to have. Make sure that ~/bin is in your path!
+# make install
 
-Even if you want to use a different script to update your images, you
-still need to put krellkam_load in your path. Your script will be called
-by krellkam_load instead of directly by GKrellKam.
+You need to make sure that GNU wget is somewhere in your path for
+GKrellKam to be able to get images from the internet.
 
-If you want to rotate through a list of images, you can create one with
-any text editor. Just put one web address or local filename on each
-line. (when using local images, be sure to include the full pathname,
-beginning with /). Then put the full pathname of that list file in the
-Image Source box on the configuration menu. An example is provided in
-the file krellkam.list.example.
