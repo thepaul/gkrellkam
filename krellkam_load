@@ -1,8 +1,8 @@
-#!/bin/bash
+#!/usr/bin/perl
 #
-# krellkam_load - rotates a list of images and URLs in ~/.krellkam.list
+# krellkam_load - rotates a list of images and URLs
 #
-# VERSION - 0.2.3
+# VERSION - 0.3.0
 #
 # Copyright (C) 2001 paul cannon
 # space software lab/utah state university
@@ -12,10 +12,11 @@
 # requires GNU wget for URL loads-
 #   see http://www.gnu.org/software/wget/wget.html
 
-function usage()
-{
-  cat << US_END
-krellkam_load 0.2.2 (Used with the GKrellKam plugin)
+use Fcntl ':flock';
+
+sub usage() {
+  print <<'US_END';
+krellkam_load 0.3.0 (Used with the GKrellKam plugin)
 
 USAGE:
 
@@ -24,102 +25,166 @@ krellkam_load [options] [override]
 If no command line parameters are given, krellkam_load examines the first
 line of the file ~/.krellkam.list, and rotates it to the bottom. The line
 can be a URL or a local path to an image file. The image is downloaded if
-appropriate, and the location output to GKrellKam, so it knows where to
-look.
+appropriate, and the location given to GKrellKam.
 
 OPTIONS:
 
 If -r or --random is specified, then the list is not rotated. One line is
 selected at random and downloaded if appropriate.
 
-If -l <listfile> or --list <listfile> is specified, then listfile is
+If -l <listfile> or --list <listfile> is specified, then <listfile> is
 used instead of ~/.krellkam.list.
 
-If a filename or URL is given on the command line (override), then the
-list will be disregarded and the given image used.
+If -x <program> or --execute <program> is given, the list is disregarded,
+and the program specified is simply run. Any options following this are
+ignored and passed to <program>.
+
+If a filename is given on the command line without any options (override),
+then krellkam_load tries to determine whether the file is an image, a
+list, or another script to run. If it's an image or a URL, the list will
+be disregarded and that image used. If a list, that list will be used
+instead of the default, as if -l had been given. If it's an executable,
+it will be run as if -x were specified, and all subsequent command line
+arguments are passed to it.
 
 US_END
+  exit 0;
 }
 
-function die()
-{
-  echo $* >&2
-  exit 1
+$list = $ENV{'HOME'}.'/.krellkam.list';
+$cachedir = $ENV{'HOME'}.'/.gkrellm/data/gkrellkam';
+$wget = 'wget -q';
+$wgetopts = '-q --cache=off --proxy=off';
+$exec_prog = '';
+$thispic = '';
+$pick_rand = 0;
+
+sub isurl {
+  my $name = shift;
+  return ($name =~ /[a-z]*:\/\//i);
 }
 
-PICS_LIST=$HOME/.krellkam.list
-TMPFILEDIR=$HOME/.gkrellm/data/gkrellkam
-WGET="wget -q"
-LOCK="/tmp/krellkam.lock"
+sub isalist {
+  my $name = shift;
+  my $thisline = '';
 
-thispic=""
-pick_rand=0
+  return 0 if isurl ($name);
+  return 0 if ($name =~ /.(jpg|jpeg|png|xpm|bmp|gif)$/i);
+  return 1 if ($name =~ /.list$/i);
 
-while [ -n "$1" ]; do
-  if [ $1 == "-r" -o $1 == "--random" ]; then
-    pick_rand=1
-  elif [ $1 == "-l" -o $1 == "--list" ]; then
-    shift
-    PICS_LIST=$1
-  elif [ $1 == "-h" -o $1 == "--help" ]; then
-    usage
-    exit 0
-  else
-    thispic="$1"
-  fi
-  shift
-done
+  open (CHECKIT, "<$name") or return 0;
 
-if [ -z "$thispic" ]; then
-  # check the list
-  test -r $PICS_LIST || die "Can't open listfile $PICS_LIST."
-  numpics=`cat $PICS_LIST | wc -l`
-  test $numpics -gt 0 || die "Listfile $PICS_LIST is empty."
+  # check only the first 5 'lines' of a file to see if it's a list- lazy.
+  for (1..5) {
+    defined ($thisline = <CHECKIT>) || return 1;
 
-  lockfile -1 $LOCK
+    # assume that local filenames in lists are absolute pathnames. Err
+    # on the side of images, since if you have a list, you can force
+    # treating it as a list with -l on the command line..
+    unless (isurl ($thisline) || $thisline =~ /^\/[[:print:]]*$/) {
+      close CHECKIT;
+      return 0;
+    }
+  }
+  close CHECKIT;
+  return 1;
+}
 
-  if [ $pick_rand == 1 ]; then
-    # pick a random line from the file
+sub checkargs {
+  do_args: while (@_) {
+    $_ = shift;
 
-    let num=($RANDOM%numpics)+1
-    thispic="`head -$num $PICS_LIST | tail -1`"
-  else
-    # rotate the list; first line goes to bottom
-    TMPLOC=`mktemp /tmp/krellkam.list.XXXXXX`
+    # if we're running another script, give it the options
+    if ($exec_prog) {
+      $exec_prog .= (" " . $_);
+      next do_args;
+    }
 
-    # remember the first line
-    thispic="`head -1 $PICS_LIST`"
+    (/^-r$/ || /^--random$/) && do {
+      $pick_rand = 1;
+      next do_args;
+    };
+    (/^-l$/ || /^--list$/) && do {      
+      $list = shift;
+      next do_args;
+    };
+    (/^-x$/ || /^--execute$/) && do {
+      $exec_prog = shift;
+      next do_args;
+    };
+    (/^-h$/ || /^--help$/) && do {
+      usage;
+    };
 
+    if (-x $_) {
+      $exec_prog = $_;
+    } elsif (isalist ($_)) {
+      $list = $_;
+    } else {
+      $thispic = $_;
+    }
+  }
+}
+    
+sub lockfile {
+  my $file = shift;
+  flock ($file, LOCK_EX);
+}
+
+sub unlockfile {
+  my $file = shift;
+  flock ($file, LOCK_UN);
+}
+
+checkargs (@ARGV);
+
+if ($exec_prog) {
+  exec ($exec_prog);   # won't return..
+}
+
+if ($thispic eq "") {
+
+  # open the list
+  die "Can't open listfile $list" unless open (LISTFILE, "+<$list");
+  lockfile (*LISTFILE);
+  seek (LISTFILE, 0, 0);
+
+  @fnames = <LISTFILE>;
+  die "Listfile $list is empty" unless ($#fnames > -1);
+
+  if ($pick_rand) {
+    srand (time ^ ($$ + ($$ << 15)));   # for old Perls
+    $thispic = $fnames[rand ($#fnames + 1)];
+  } else {
     # rotate the list
-    let num=numpics-1
-    tail -$num $PICS_LIST > $TMPLOC
-    echo "$thispic" >> $TMPLOC
-    mv $TMPLOC $PICS_LIST
-  fi
+    seek (LISTFILE, 0, 0);
 
-  rm -f $LOCK
-fi
+    print LISTFILE (join '', @fnames[1..$#fnames]);
+    print LISTFILE $fnames[0];
+    $thispic = $fnames[0];
+  }
+  unlockfile (*LISTFILE);
+  close LISTFILE;
+}
 
-# determine if URL or local file
-if echo "$thispic" | grep "://" > /dev/null; then
+$thispic =~ s/\n*$/\n/;  # ensure exactly one newline at end
+
+if (isurl ($thispic)) {
 
   # Load URL. First convert it to a name suitable for a filename..
-
-  FILELOC=$(echo "$thispic" | sed -e "y/:\/%\!\`*?&=/----------/")
+  ($localname = $thispic) =~ tr[:/%!\\"`'$*?&=]/-/;
 
   # Make sure a directory is where we want it..
-
-  test -d $TMPFILEDIR || mkdir -p $TMPFILEDIR
+  mkdir $cachedir;
 
   # download.
+  system ("$wget $wgetopts -O \"$cachedir/$localname\" \"$thispic\"") or
+            die "Couldn't start $wget";
+  print "$cachedir/$localname";
 
-  FILEPATH="$TMPFILEDIR/$FILELOC"
-  $WGET $WGET_OPTS -O "$FILEPATH" "$thispic"
-  echo "$FILEPATH"
-
-else
+} else {
 
   # Local image file..
-  echo "$thispic"
+  print $thispic;
 
-fi
+}
