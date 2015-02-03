@@ -1,3 +1,10 @@
-Notes for release:
+Notes for GKrellKam version 0.2.2b:
 
-see ChangeLog
+krellkam_load is now required, and called for all image panels. The user
+only sets the parameters to krellkam_load. This means that a user can just
+enter a web URL or listfile or local picture in the config box and forget
+about the script. Another script can still be called- put "-x myscript" in
+the config box.
+
+See the Info tab for GKrellKam in the GKrellM configuration window for
+help setting up your panels.

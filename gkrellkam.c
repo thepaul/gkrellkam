@@ -19,13 +19,20 @@
 
   To contact the author try:
   <paul@cannon.cs.usu.edu>
+
+  A note on style here:
+
+    I use (gchar *) for a string's type when the array is dynamically
+    allocated with the g_* functions, and will eventually need to be
+    g_free'd. Strings of type (char *) are static memory.
 */
 
 #include <gkrellm/gkrellm.h>
+#include <libgen.h>
 #include <errno.h>
 
 #define PLUGIN_NAME "GKrellKam"
-#define PLUGIN_VER "0.2.2"
+#define PLUGIN_VER "0.2.2b"
 #define PLUGIN_DESC "GKrellM Image Watcher plugin"
 #define PLUGIN_URL "http://gkrellkam.sourceforge.net/"
 #define PLUGIN_STYLE PLUGIN_NAME
@@ -38,29 +45,13 @@ static gchar *kkam_info_text[] =
 "GKrellKam is a plugin that can watch a number of image files,\n",
 "and display them sized to fit in panels on your gkrellm.\n\n",
 
-"Each panel has a script associated with it. To update its\n",
-"picture, it will call that script, and the script is expected\n",
-"to output the filename of a local image. That image will be\n",
-"loaded, sized to the right width and height, and put in the\n",
-"box. If the image you want to watch is online, the script has\n",
-"the responsibility to download it and tell GKrellKam where it\n",
-"is.\n\n",
+"You can left-click on an image panel to start your favorite\n",
+"image viewer and display the original, unsized image, or you\n",
+"can right-click on it to get an immediate update.\n\n",
 
-"krellkam_load, distributed with this plugin, is a useful\n",
-"example of such a script. When called, krellkam_load looks for\n",
-"a file called .krellkam.list in your home directory. That file\n",
-"should contain one image location on every line. The image\n",
-"locations can either be full pathnames to local images, or\n",
-"URLs of remote images (make sure to include the http:// or\n",
-"ftp:// part of the URLs). krellkam_load will rotate that list,\n",
-"so that each time it is called, the next picture in line will\n",
-"be displayed in GKrellKam. For more usage information, type\n",
-"\"krellkam_load --help\". Any number of panels can use the same\n",
-"krellkam_load list, if you would like them to.\n\n",
+"<b>-- CONFIGURATION TABS --\n\n",
 
-"<b>-- Configuration Tabs --\n\n",
-
-"<b>Options\n\n",
+"<b>Global Options\n\n",
 
 "<i>Path to image viewer program\n",
 "When you left-click on a GKrellKam panel, it will start your\n",
@@ -92,11 +83,19 @@ static gchar *kkam_info_text[] =
 "panel. They maintain their aspect, and theme background is\n",
 "shown on either the sides or the top and bottom.\n\n",
 
-"<i>Script to execute for image update\n",
-"This is what the panel will run to get a new image. If the box\n",
-"is empty, the panel will remain empty as well. If you don't\n",
-"have a custom script, you probably want to put \"krellkam_load\"\n",
-"here. Make sure that krellkam_load is in your path.\n\n",
+"<i>Image Source\n",
+"Each panel has a `source' associated with it. A source can be\n",
+"a local picture, the web address of a picture, a list of\n",
+"pictures, or a script to call to get a new picture. To give a\n",
+"local picture file, list of files, or a script, enter the\n",
+"_full_ filename in the \"Image Source\" box. To watch a webcam\n",
+"or other online picture, just put its address (beginning with\n",
+"http:// or ftp://) in the \"Image Source\" box. GKrellKam uses\n",
+"a script called krellkam_load, included with this distribution,\n",
+"to manage lists of images and download remote ones. In fact,\n",
+"anything you put in the \"Image Source\" box is simply given\n",
+"to krellkam_load as its command line parameters. Run\n",
+"\"krellkam_load --help\" for more detailed usage instructions.\n\n",
 
 "<b>For more info, see " PLUGIN_URL
 };
@@ -111,16 +110,17 @@ static gchar *kkam_about_text = _(
   "see the file COPYING for details.\n\n"
   PLUGIN_URL );
 
-const char *default_script[] = {
-  "krellkam_load",
-  "krellkam_load -l ~/.krellkam.list2",
-  "krellkam_load -l ~/.krellkam.list3",
-  "krellkam_load -l ~/.krellkam.list4",
-  "krellkam_load -l ~/.krellkam.list5"
+const char *default_source[] = {
+  "http://www.usu.edu/webcam/usucam.jpg",
+  "~/.krellkam2.list",
+  "~/.krellkam3.list",
+  "~/.krellkam4.list",
+  "~/.krellkam5.list"
 };
 
 const char *default_viewer = "eeyes";
 
+#define WGET_SCRIPT "krellkam_load"
 #define BUFLEN 256
 #define MIN_NUMPANELS 0
 #define MAX_NUMPANELS 5
@@ -135,7 +135,7 @@ typedef struct
   FILE *cmd_pipe;
   int count;
   char *imgfname;
-  char *upd_script;
+  char *source;
   int height;
   int period;
   int boundary;
@@ -145,7 +145,7 @@ typedef struct
   GtkWidget *boundary_spinner;
   GtkWidget *height_spinner;
   GtkWidget *aspect_box;
-  GtkWidget *scriptbox;
+  GtkWidget *sourcebox;
   GdkImlibImage *imlibim;
 } KKamPanel;
 
@@ -277,24 +277,24 @@ static void draw_imlibim (KKamPanel *p)
 /*
   start_img_update ()
 
-  Open a pipe and spawn the update script. Return value
-  indicates whether pipe should be checked for output every
-  two seconds (1), or just ignored until next update (0)
+  Open a pipe and spawn the update script.
 */
 static void start_img_update (KKamPanel *p)
 {
+  gchar *krellkam_load_str;
+
   if (p->cmd_pipe) /* already open */
     return;
 
-  if (!p->upd_script)
+  if (!p->source)
   {
-    printf ("error: upd_script is null\n");
+    fprintf (stderr, "error: source is null\n");
     return;
   }
-  if (p->upd_script[0] == '\0') /* do nothing for empty script */
-    return;
 
-  p->cmd_pipe = popen (p->upd_script, "r");
+  krellkam_load_str = g_strdup_printf ("%s %s", WGET_SCRIPT, p->source);
+  p->cmd_pipe = popen (krellkam_load_str, "r");
+  g_free (krellkam_load_str);
   if (p->cmd_pipe)
     fcntl (fileno (p->cmd_pipe), F_SETFL, O_NONBLOCK);
 }
@@ -396,7 +396,7 @@ static void kkam_update_plugin ()
 
   launches eeyes, or whatever viewer the user has configured, to
   display the unscaled version of the image (looking where
-  we loaded it)
+  we loaded it). If the user right-clicked, get a fresh image.
 */
 static gint show_curimage (GtkWidget *widget, GdkEventButton *ev, gpointer gw)
 {
@@ -488,7 +488,7 @@ static void cb_height_spinner (gpointer s, KKamPanel *p)
 */
 static GtkWidget *create_configpanel_tab (int i)
 {
-  GtkWidget *vbox, *scripthbox, *scriptlabel;
+  GtkWidget *vbox, *sourcehbox, *sourcelabel;
 
   vbox = gtk_vbox_new (FALSE, 0);
 
@@ -514,15 +514,15 @@ static GtkWidget *create_configpanel_tab (int i)
   gtk_signal_connect (GTK_OBJECT (panels[i].aspect_box), "toggled",
                       GTK_SIGNAL_FUNC (cb_aspect_box), &panels[i]);
 
-  scripthbox = gtk_hbox_new (FALSE, 0);
-  scriptlabel = gtk_label_new (_("Script to execute for image update:  "));
-  panels[i].scriptbox = gtk_entry_new ();
-  gtk_entry_set_text (GTK_ENTRY (panels[i].scriptbox), panels[i].upd_script);
-  gtk_entry_set_editable (GTK_ENTRY (panels[i].scriptbox), TRUE);
+  sourcehbox = gtk_hbox_new (FALSE, 0);
+  sourcelabel = gtk_label_new (_("Image source:  "));
+  panels[i].sourcebox = gtk_entry_new ();
+  gtk_entry_set_text (GTK_ENTRY (panels[i].sourcebox), panels[i].source);
+  gtk_entry_set_editable (GTK_ENTRY (panels[i].sourcebox), TRUE);
 
-  gtk_box_pack_start (GTK_BOX (scripthbox), scriptlabel, FALSE, FALSE, 0);
-  gtk_box_pack_start (GTK_BOX (scripthbox), panels[i].scriptbox, TRUE, TRUE, 0);
-  gtk_box_pack_start (GTK_BOX (vbox), scripthbox, TRUE, TRUE, 0);
+  gtk_box_pack_start (GTK_BOX (sourcehbox), sourcelabel, FALSE, FALSE, 0);
+  gtk_box_pack_start (GTK_BOX (sourcehbox), panels[i].sourcebox, TRUE, TRUE, 0);
+  gtk_box_pack_start (GTK_BOX (vbox), sourcehbox, TRUE, TRUE, 0);
 
   gtk_widget_show_all (vbox);
 
@@ -671,6 +671,32 @@ static void kkam_create_plugin (GtkWidget *vbox, gint first_create)
   }
 }
 
+static gchar *update_script_config (char *oldval)
+{
+  gchar *chopmeup, *ret;
+  char *firstword, *rest;
+
+  chopmeup = g_strdup_printf ("%s\n \n", g_strstrip (oldval));
+  firstword = strtok (chopmeup, " \n");
+  if (!firstword)
+    return NULL;
+  rest = strtok (NULL, "\n");
+  if (!rest)
+    return NULL;
+  g_strstrip (rest);
+  
+  /* If the old update_script item was using krellkam_load, just keep its
+     parameters. If it was using a different script, put it with the
+     appropriate option into the krellkam_load parameters (-x) */
+
+  if (!strcmp (basename (firstword), WGET_SCRIPT))
+    ret = g_strdup (rest);
+  else
+    ret = g_strdup_printf ("-x %s", oldval);
+  g_free (chopmeup);
+  return ret;
+}
+
 static void kkam_save_config (FILE *f)
 {
   int i;
@@ -680,8 +706,8 @@ static void kkam_save_config (FILE *f)
 
   for (i = 0; i < MAX_NUMPANELS; i++)
   {
-    fprintf (f, "%s %d update_script %s\n",
-             PLUGIN_KEYWORD, i + 1, panels[i].upd_script);
+    fprintf (f, "%s %d source %s\n",
+             PLUGIN_KEYWORD, i + 1, panels[i].source);
     fprintf (f, "%s %d img_height %d\n",
              PLUGIN_KEYWORD, i + 1, panels[i].height);
     fprintf (f, "%s %d update_period %d\n",
@@ -723,13 +749,23 @@ static void kkam_load_config (gchar *arg)
     if (validnum (which))
       panels[which].period = MAX (atoi (value), 1);
   }
-  else if (!strcmp (config_item, "update_script"))
+  else if (!strcmp (config_item, "source"))
   {
     if (validnum (which))
     {
-      if (panels[which].upd_script)
-        g_free (panels[which].upd_script);
-      panels[which].upd_script = g_strstrip (g_strdup (value));
+      if (panels[which].source)
+        g_free (panels[which].source);
+      panels[which].source = g_strstrip (g_strdup (value));
+    }
+  }
+  else if (!strcmp (config_item, "update_script"))
+  {
+    /* this is for backwards compatibility- update old config item */
+    if (validnum (which))
+    {
+      if (panels[which].source)
+        g_free (panels[which].source);
+      panels[which].source = update_script_config (value);
     }
   }
   else if (!strcmp (config_item, "maintain_aspect"))
@@ -839,10 +875,10 @@ static void kkam_apply_config ()
 
   for (i = 0; i < numpanels; i++)
   {
-    if (panels[i].upd_script)
-      g_free (panels[i].upd_script);
-    panels[i].upd_script = gtk_editable_get_chars
-                               (GTK_EDITABLE (panels[i].scriptbox), 0, -1);
+    if (panels[i].source)
+      g_free (panels[i].source);
+    panels[i].source = gtk_editable_get_chars
+                               (GTK_EDITABLE (panels[i].sourcebox), 0, -1);
     panels[i].period = gtk_spin_button_get_value_as_int
                                (GTK_SPIN_BUTTON (panels[i].period_spinner));
     panels[i].maintain_aspect = GTK_TOGGLE_BUTTON (panels[i].aspect_box)->active;
@@ -892,7 +928,7 @@ Monitor *init_plugin ()
   
   for (i = 0; i < MAX_NUMPANELS; i++)
   {  
-    panels[i].upd_script = g_strdup (default_script[i]);
+    panels[i].source = g_strdup (default_source[i]);
     panels[i].height = 50;
     panels[i].period = 1;
     panels[i].boundary = 0;
