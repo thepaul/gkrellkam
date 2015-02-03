@@ -46,7 +46,6 @@ function die()
 
 PICS_LIST=$HOME/.krellkam.list
 FILELOC=$HOME/.krellkam.jpg
-TMPLOC=`mktemp /tmp/krellkam.XXXXXX`
 WGET="wget -q"
 
 thispic=""
@@ -80,6 +79,7 @@ if [ -z $thispic ]; then
     thispic=`head -$num $PICS_LIST | tail -1`
   else
     # rotate the list; first line goes to bottom
+    TMPLOC=`mktemp /tmp/krellkam.XXXXXX`
 
     # remember the first line
     thispic=`head -1 $PICS_LIST`

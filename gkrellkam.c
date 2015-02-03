@@ -25,9 +25,11 @@
 #include <errno.h>
 
 #define PLUGIN_NAME "GKrellKam"
-#define KAM_VERSION "0.1.1c"
-#define KAM_STYLE PLUGIN_NAME
-#define CONFIG_KEYWORD PLUGIN_NAME
+#define PLUGIN_VER "0.1.1d"
+#define PLUGIN_DESC "GKrellM Image Watcher plugin"
+#define PLUGIN_URL "http://gkrellkam.sourceforge.net/"
+#define PLUGIN_STYLE PLUGIN_NAME
+#define PLUGIN_KEYWORD PLUGIN_NAME
 
 static gchar *kkam_info_text[] = 
 {
@@ -58,15 +60,17 @@ static gchar *kkam_info_text[] =
   "the count is reset."
 };
 
-static gchar *kkam_about_text =
-  PLUGIN_NAME " " KAM_VERSION
-  "\nGKrellM Image-watcher plugin\n"
-  "\nCopyright (C) 2001 paul cannon\n"
+static gchar *kkam_about_text = _(
+  PLUGIN_NAME " " PLUGIN_VER
+  "\n" PLUGIN_DESC
+  "\n\nCopyright (C) 2001 paul cannon\n"
   "paul@cannon.cs.usu.edu\n"
   "space software lab/utah state university\n\n"
-  "GKrellKam comes with ABSOLUTELY NO WARRANTY;\n"
+  PLUGIN_NAME " comes with ABSOLUTELY NO WARRANTY;\n"
   "see the file COPYING for details.\n\n"
-  "http://ssl.usu.edu/paul/gkrellkam/";
+  PLUGIN_URL );
+
+#define PARAMLEN 256
 
 static Panel *img_panel = NULL;
 static Decal *img_decal = NULL;
@@ -74,14 +78,12 @@ static GdkPixmap *img_pixmap = NULL;
 static Style *img_style = NULL;
 static gint style_id;
 
-#define PARAMLEN 256
-
 static int kkam_height = 50;
 static int use_height;
 static int kkam_period = 1;
 static char imgfname[PARAMLEN] = "";
 static char upd_script[PARAMLEN] = "krellkam_load";
-static char viewer_prog[PARAMLEN] = "xv";
+static char viewer_prog[PARAMLEN] = "eeyes";
 
 static GtkWidget *period_spinner;
 static GtkWidget *height_spinner;
@@ -99,19 +101,14 @@ void do_nothing (char *format, ...) {}
   indicates whether pipe should be checked for output every
   two seconds (1), or just ignored until next update (0)
 */
-static int
-start_img_update ()
+static void start_img_update ()
 {
   if (cmd_pipe) /* already open */
-    return 1;
+    return;
 
   cmd_pipe = popen (upd_script, "r");
   if (cmd_pipe)
-  {
     fcntl (fileno (cmd_pipe), F_SETFL, O_NONBLOCK);
-    return 1;
-  }
-  return 0;
 }
 
 /*
@@ -123,8 +120,7 @@ start_img_update ()
 
   On error, returns -1. On not yet ready, returns 0.
 */
-static int
-get_script_results (char *fname)
+static int get_script_results (char *fname)
 {
   char buffer[PARAMLEN];
   int len;
@@ -157,8 +153,7 @@ get_script_results (char *fname)
   If results are available from update script, load the new file and
   draw it onto the panel.
 */
-static void
-checkscript ()
+static void checkscript ()
 {
   static GdkImlibImage *imlibim;
   struct stat img_st;
@@ -199,8 +194,7 @@ checkscript ()
   callback to gkrellm. Counts minutes until next update, and when
   count is reached, starts the process.
 */
-static void
-kkam_update_plugin ()
+static void kkam_update_plugin ()
 {
   static int count = 0;
 
@@ -217,12 +211,11 @@ kkam_update_plugin ()
 /*
   show_curimage ()
 
-  launches xv, or whatever viewer the user has configured, to
+  launches eeyes, or whatever viewer the user has configured, to
   display the unscaled version of the image (looking where
   we left it)
 */
-static gint
-show_curimage (GtkWidget *widget, GdkEventButton *ev)
+static gint show_curimage (GtkWidget *widget, GdkEventButton *ev)
 {
   char cmd[PARAMLEN * 2];
   
@@ -239,8 +232,7 @@ show_curimage (GtkWidget *widget, GdkEventButton *ev)
   return FALSE;
 }
 
-static gint
-panel_expose_event (GtkWidget *widget, GdkEventExpose *ev)
+static gint panel_expose_event (GtkWidget *widget, GdkEventExpose *ev)
 {
   if (img_pixmap)
   {
@@ -252,21 +244,13 @@ panel_expose_event (GtkWidget *widget, GdkEventExpose *ev)
   return FALSE;
 }
 
-static void
-kkam_create_plugin (GtkWidget *vbox, gint first_create)
+static void kkam_create_plugin (GtkWidget *vbox, gint first_create)
 {
   if (first_create)
   {
     start_img_update ();
     img_panel = gkrellm_panel_new0 ();
   }
-
-#if 0
-  /* I'm told I'm supposed to do this, but I do it in checkscript ()
-     instead, when I make new decals. I think this works ok */
-  else
-    gkrellm_destroy_decal_list (img_panel);
-#endif
 
   img_style = gkrellm_meter_style (style_id);
   img_panel->textstyle = gkrellm_meter_textstyle (style_id);
@@ -289,17 +273,15 @@ kkam_create_plugin (GtkWidget *vbox, gint first_create)
   }
 }
 
-static void
-kkam_save_config (FILE *f)
+static void kkam_save_config (FILE *f)
 {
-  fprintf (f, "%s img_height %d\n", CONFIG_KEYWORD, kkam_height);
-  fprintf (f, "%s update_period %d\n", CONFIG_KEYWORD, kkam_period);
-  fprintf (f, "%s update_script %s\n", CONFIG_KEYWORD, upd_script);
-  fprintf (f, "%s viewer_prog %s\n", CONFIG_KEYWORD, viewer_prog);
+  fprintf (f, "%s img_height %d\n", PLUGIN_KEYWORD, kkam_height);
+  fprintf (f, "%s update_period %d\n", PLUGIN_KEYWORD, kkam_period);
+  fprintf (f, "%s update_script %s\n", PLUGIN_KEYWORD, upd_script);
+  fprintf (f, "%s viewer_prog %s\n", PLUGIN_KEYWORD, viewer_prog);
 }
 
-static void
-kkam_load_config (gchar *arg)
+static void kkam_load_config (gchar *arg)
 {
   gchar *config_item, *value;
 
@@ -334,8 +316,7 @@ kkam_load_config (gchar *arg)
   }
 }
 
-static void
-kkam_create_tab (GtkWidget *tab_vbox)
+static void kkam_create_tab (GtkWidget *tab_vbox)
 {
   GtkWidget *tabs;
   GtkWidget *vbox, *hbox1, *hbox2;
@@ -362,8 +343,8 @@ kkam_create_tab (GtkWidget *tab_vbox)
 
   hbox1 = gtk_hbox_new (FALSE, 0);
   hbox2 = gtk_hbox_new (FALSE, 0);
-  label1 = gtk_label_new ("Script to execute for image update:");
-  label2 = gtk_label_new ("Path to image viewer program:");
+  label1 = gtk_label_new (_("Script to execute for image update:  "));
+  label2 = gtk_label_new (_("Path to image viewer program:  "));
   scriptbox = gtk_entry_new ();
   viewerbox = gtk_entry_new ();
   gtk_entry_set_text (GTK_ENTRY (scriptbox), upd_script);
@@ -371,11 +352,11 @@ kkam_create_tab (GtkWidget *tab_vbox)
   gtk_entry_set_text (GTK_ENTRY (viewerbox), viewer_prog);
   gtk_entry_set_editable (GTK_ENTRY (viewerbox), TRUE);
 
-  gtk_container_add (GTK_CONTAINER (hbox1), label1);
-  gtk_container_add (GTK_CONTAINER (hbox1), scriptbox);
+  gtk_box_pack_start (GTK_BOX (hbox1), label1, FALSE, FALSE, 0);
+  gtk_box_pack_start (GTK_BOX (hbox1), scriptbox, TRUE, TRUE, 0);
   gtk_box_pack_start (GTK_BOX (vbox), hbox1, TRUE, TRUE, 0);
-  gtk_container_add (GTK_CONTAINER (hbox2), label2);
-  gtk_container_add (GTK_CONTAINER (hbox2), viewerbox);
+  gtk_box_pack_start (GTK_BOX (hbox2), label2, FALSE, FALSE, 0);
+  gtk_box_pack_start (GTK_BOX (hbox2), viewerbox, FALSE, FALSE, 0);
   gtk_box_pack_start (GTK_BOX (vbox), hbox2, TRUE, TRUE, 0);
 
   /* Info tab */
@@ -398,8 +379,7 @@ kkam_create_tab (GtkWidget *tab_vbox)
   gtk_notebook_append_page (GTK_NOTEBOOK (tabs), about, aboutlabel);  
 }
 
-static void
-kkam_apply_config ()
+static void kkam_apply_config ()
 {
   gchar *newval;
 
@@ -428,7 +408,7 @@ static Monitor kam_mon  =
 
   kkam_save_config,    /* The save_plugin_config() function        */
   kkam_load_config,    /* The load_plugin_config() function        */
-  CONFIG_KEYWORD,      /* config keyword                           */
+  PLUGIN_KEYWORD,      /* config keyword                           */
 
   NULL,                /* Undefined 2                              */
   NULL,                /* Undefined 1                              */
@@ -439,10 +419,9 @@ static Monitor kam_mon  =
   NULL                 /* path if a plugin, filled in by GKrellM   */
 };
 
-Monitor *
-init_plugin ()
+Monitor *init_plugin ()
 {
-  style_id = gkrellm_add_meter_style (&kam_mon, KAM_STYLE);
+  style_id = gkrellm_add_meter_style (&kam_mon, PLUGIN_STYLE);
   return &kam_mon;
 }
 

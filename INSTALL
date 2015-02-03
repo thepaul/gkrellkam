@@ -31,5 +31,11 @@ mkdir -p ~/bin
 cp krellkam_load ~/bin
 chmod 0744 ~/bin/krellkam_load
 
-then make sure $HOME/bin is in your path.
+then make sure $HOME/bin is in your path. In your home directory,
+make a file called .krellkam.list that contains a URL or filename
+on every line (an example is in krellkam.list.example).
+krellkam_load will cycle through these entries. If you want it to
+pick one at random each time, change the script field in the
+GKrellKam configuration from "krellkam_load" to "krellkam_load -r".
+Type "krellkam_load -h" for more usage instructions.
 
