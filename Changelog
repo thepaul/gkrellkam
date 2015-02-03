@@ -1,6 +1,12 @@
 GKrellKam Changelog
 -------------------
 
+0.2.5 - Oct 25, 2001
+  * Cleans out /tmp/krellkam* files left over from the last
+    time gkrellm died (there's no way to delete them at the time)
+  * Fixes some obnoxious defaults
+  * Minor bugfixes
+
 0.2.4 - Sep 11, 2001
   * I've had code to take advantage of the new GKrellm 1.2.0
     features for some time, and now I'm giving it out :)

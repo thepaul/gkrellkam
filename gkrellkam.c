@@ -36,9 +36,9 @@
 
 #if ((GKRELLM_VERSION_MAJOR == 1) && (GKRELLM_VERSION_MINOR >= 2))
 # define GKRELLM_1_2_0
-# define PLUGIN_VER "0.2.4/s2"
+# define PLUGIN_VER "0.2.5/s2"
 #else
-# define PLUGIN_VER "0.2.4/s1"
+# define PLUGIN_VER "0.2.5/s1"
 #endif
 
 #define PLUGIN_NAME "GKrellKam"
@@ -46,6 +46,8 @@
 #define PLUGIN_URL "http://gkrellkam.sourceforge.net/"
 #define PLUGIN_STYLE PLUGIN_NAME
 #define PLUGIN_KEYWORD PLUGIN_NAME
+
+#define TEMPTEMPLATE "/tmp/krellkam"
 
 #define DEBUGGING 0
 
@@ -68,9 +70,9 @@ static gchar *kkam_info_text[] =
 "the number of visible panels, and scrolling it down decreases\n",
 "the number.",
 #ifdef GKRELLM_1_2_0
-" This is compiled for the new GKrellM 1.2.0, so you can also\n",
+" This is compiled for the new GKrellM 1.2.0, so you\ncan also ",
 "<b>right-click",
-" on a panel to open the configuration window.",
+" on a panel to open the configuration\nwindow.",
 #endif
 
 "\n\n",
@@ -161,11 +163,11 @@ static gchar *kkam_about_text = _(
   PLUGIN_URL );
 
 static const char *default_source[] = {
-  "~/.krellkam.list",
-  "~/.krellkam2.list",
-  "~/.krellkam3.list",
-  "~/.krellkam4.list",
-  "~/.krellkam5.list"
+  "http://www.usu.edu/webcam/fullsize.jpg",
+  "",
+  "",
+  "",
+  ""
 };
 
 static const char *default_viewer = "eeyes";
@@ -239,7 +241,7 @@ static gint style_id;
 static char *viewer_prog = NULL;
 
 static GtkWidget *viewerbox;
-static GtkWidget *numpanel_spinner;
+static GtkWidget *numpanel_spinner = NULL;
 static GtkWidget *tabs = NULL;
 static GtkWidget *kkam_vbox = NULL;
 static GtkWidget *filebox = NULL;
@@ -451,7 +453,7 @@ static void draw_imlibim (KKamPanel *p)
 static void start_img_dl (KKamPanel *p)
 {
   gchar *wget_str;
-  char tmpfile[] = "/tmp/krellkamXXXXXX";
+  char tmpfile[] = TEMPTEMPLATE "XXXXXX";
   int tmpfd;
 
   if (p->cmd_pipe) /* already open */
@@ -1553,9 +1555,8 @@ static void kkam_create_tab (GtkWidget *tab_vbox)
 {
   GtkWidget *vbox, *tablabel;
   GtkWidget *scrolled, *text;
-  GtkWidget *viewerlabel, *viewerhbox;
-  GtkWidget *configpanel;
-  GtkWidget *about;
+  GtkWidget *hbox, *configpanel, *about;
+  GtkAdjustment *numadj;
   gchar *tabname;
   int i;
 
@@ -1570,23 +1571,30 @@ static void kkam_create_tab (GtkWidget *tab_vbox)
   /* main options tab */
   vbox = gkrellm_create_tab (tabs, _("Options"));
   
-  viewerhbox = gtk_hbox_new (FALSE, 0);
-  viewerlabel = gtk_label_new (_("Path to image viewer program:  "));
+  hbox = gtk_hbox_new (FALSE, 0);
   viewerbox = gtk_entry_new ();
   gtk_entry_set_text (GTK_ENTRY (viewerbox), viewer_prog);
   gtk_entry_set_editable (GTK_ENTRY (viewerbox), TRUE);
 
-  gtk_box_pack_start (GTK_BOX (viewerhbox), viewerlabel, FALSE, FALSE, 0);
-  gtk_box_pack_start (GTK_BOX (viewerhbox), viewerbox, FALSE, FALSE, 0);
+  gtk_box_pack_start (GTK_BOX (hbox),
+                      gtk_label_new (_("Path to image viewer program:")),
+                      FALSE, FALSE, 10);
+  gtk_box_pack_start (GTK_BOX (hbox), viewerbox, FALSE, FALSE, 0);
+  gtk_box_pack_start (GTK_BOX (vbox), hbox, TRUE, FALSE, 0);
   
-  gtk_box_pack_start (GTK_BOX (vbox), viewerhbox, TRUE, FALSE, 0);
-  
-  gkrellm_spin_button (vbox, &numpanel_spinner,
-                       (gfloat) numpanels,
-                       (gfloat) MIN_NUMPANELS,
-                       (gfloat) MAX_NUMPANELS,
-                       1.0, 1.0, 0, 0, cb_numpanel_spinner, NULL,
-                       FALSE, _("Number of panels"));
+  numadj = (GtkAdjustment *) gtk_adjustment_new ((gfloat) numpanels,
+                             (gfloat) MIN_NUMPANELS,
+                             (gfloat) MAX_NUMPANELS,
+                             1.0, 1.0, 0);
+  numpanel_spinner = gtk_spin_button_new (numadj, 1.0, 0);
+  gtk_signal_connect (GTK_OBJECT (numpanel_spinner), "changed",
+                      GTK_SIGNAL_FUNC (cb_numpanel_spinner), NULL);
+  hbox = gtk_hbox_new (FALSE, 0);
+  gtk_box_pack_start (GTK_BOX (hbox), numpanel_spinner, FALSE, FALSE, 10);
+  gtk_box_pack_start (GTK_BOX (hbox),
+                      gtk_label_new (_("Number of panels")),
+                      FALSE, FALSE, 0);
+  gtk_box_pack_start (GTK_BOX (vbox), hbox, TRUE, FALSE, 0);
   
   /* individual panel options tabs */
   for (i = 0; i < MAX_NUMPANELS; i++)
@@ -1678,7 +1686,10 @@ static Monitor kam_mon  =
 Monitor *init_plugin ()
 {
   int i;
+  char rmcmd[] = "rm -f " TEMPTEMPLATE "*";
   
+  system (rmcmd);
+
   style_id = gkrellm_add_meter_style (&kam_mon, PLUGIN_STYLE);
   panels = g_new0 (KKamPanel, MAX_NUMPANELS);
   
@@ -1689,6 +1700,7 @@ Monitor *init_plugin ()
   {
     panels[i].height = 50;
     panels[i].source = g_strdup (default_source[i]);
+    panels[i].default_period = 60;
   }
 
   return (monitor = &kam_mon);

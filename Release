@@ -1,4 +1,4 @@
-Notes for GKrellKam version 0.2.4:
+Notes for GKrellKam version 0.2.5:
 
 As of 0.2.3, krellkam_load is no longer required. Its functionality is
 now built into the GKrellKam plugin. This allows (or will allow) for
@@ -14,4 +14,9 @@ As of 0.2.4, the new capabilities of GKrellM 1.2.x can be utilized
 (configuration accessible via right-click). The code can still be
 compiled fine with GKrellM 1.0.x headers too.
 
-Look for online list capability in the next release.
+0.2.5 fixes some annoying defaults for beginning users of gkrellkam.
+In addition, any /tmp/krellkam* files left over from the last time
+gkrellm was run are deleted. The plugin can't tell when gkrellm is
+dying, so it can't delete them at the time.
+
+Look for online list capability in the next feature release.
