@@ -1,0 +1,35 @@
+INSTALLING THE PLUGIN
+
+To install, you'll just need to compile the plugin and place
+it (gkrellkam.so) into your gkrellm plugins directory- probably
+$HOME/.gkrellm/plugins or the systemwide plugin directory.
+
+Compile using:
+
+$ make
+
+If you want the plugin in your own .gkrellm directory, and it
+is at $HOME/.gkrellm/plugins, you can install using
+
+$ make install
+
+INSTALLING THE SCRIPT
+
+GKrellKam needs to call a script to update the panel image. You
+might want to use my script, krellkam_load, which cycles through
+a list of URLs or filenames, and fetches the URLs using wget.
+To use it, you'll need to make it executable and either put it
+somewhere in your path, or give the whole path to the script in
+the Configuration menu.
+
+If you want to use a different script, obviously, you'll need to
+put that in your path or give GKrellKam the full path.
+
+The following instructions should suffice to watch a webcam:
+
+mkdir -p ~/bin
+cp krellkam_load ~/bin
+chmod 0744 ~/bin/krellkam_load
+
+then make sure $HOME/bin is in your path.
+
