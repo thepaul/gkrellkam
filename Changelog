@@ -1,6 +1,9 @@
 GKrellKam Changelog
 -------------------
 
+0.3.4 - Mar 19, 2002
+  * Remove --proxy=off from wget options.
+
 0.3.3 - Feb 1, 2001
   * Fixed error message from not closing pipe after source read from
     a script or external program

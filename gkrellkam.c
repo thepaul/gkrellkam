@@ -41,9 +41,9 @@
 #if (GKRELLM_VERSION_MAJOR > 1) || \
     ((GKRELLM_VERSION_MAJOR == 1) && (GKRELLM_VERSION_MINOR >= 2))
 # define GKRELLM_1_2_0
-# define PLUGIN_VER "0.3.3/s2"
+# define PLUGIN_VER "0.3.4/s2"
 #else
-# define PLUGIN_VER "0.3.3/s1"
+# define PLUGIN_VER "0.3.4/s1"
 #endif
 
 #define PLUGIN_NAME "GKrellKam"
@@ -185,7 +185,7 @@ static const char *default_source[] = {
   ""
 };
 
-#define wget_opts "--proxy=off --cache=off"
+#define wget_opts "--cache=off"
 #define BUFLEN 256
 #define MIN_NUMPANELS 0
 #define MAX_NUMPANELS 5
@@ -415,7 +415,7 @@ static void kkam_iv_saveas (ViewerInfo *vi)
     return;
   }
 
-  vi->fdialog = gtk_file_selection_new ("Save As:");
+  vi->fdialog = gtk_file_selection_new (_("Save As:"));
 
   gtk_signal_connect_object (
            GTK_OBJECT (GTK_FILE_SELECTION (vi->fdialog)->ok_button),
@@ -437,9 +437,9 @@ static void kkam_iv_saveas (ViewerInfo *vi)
 static void kkam_iv_makemenu (ViewerInfo *vi)
 {
   vi->menu = gtk_menu_new ();
-  kkam_add_menu_item (vi->menu, "Close",
+  kkam_add_menu_item (vi->menu, _("Close"),
                       GTK_SIGNAL_FUNC (kkam_iv_destroy), (gpointer)vi);
-  kkam_add_menu_item (vi->menu, "Save As..",
+  kkam_add_menu_item (vi->menu, _("Save As.."),
                       GTK_SIGNAL_FUNC (kkam_iv_saveas), (gpointer)vi);
 }
 
@@ -777,11 +777,11 @@ static int load_image_file (KKamPanel *p)
     ks->next_dl = 0;
     return -1;
   }
-  
-  if (p->imlibim)    
+
+  if (p->imlibim)
     gdk_imlib_kill_image (p->imlibim);
   p->imlibim = gdk_imlib_load_image (ks->tfile);
-  draw_imlibim (p);  
+  draw_imlibim (p);
 
   if (ks->tooltip)
     gtk_tooltips_set_tip (tooltipobj, p->panel->drawing_area,
@@ -1139,7 +1139,7 @@ static void src_set (KKamPanel *p)
 */
 static void srcbrowse (KKamPanel *p)
 {
-  filebox = gtk_file_selection_new ("Select Image Source");
+  filebox = gtk_file_selection_new (_("Select Image Source"));
   gtk_signal_connect_object (
                      GTK_OBJECT (GTK_FILE_SELECTION (filebox)->ok_button),
                      "clicked", GTK_SIGNAL_FUNC (src_set), (gpointer)p);
@@ -1246,7 +1246,7 @@ static void insert_configpanel_tab (int i)
 
   configpanel = create_configpanel_tab (i);
   
-  labeltxt = g_strdup_printf ("Panel #%i", i + 1);
+  labeltxt = g_strdup_printf (_("Panel #%i"), i + 1);
   label = gtk_label_new (labeltxt);
   g_free (labeltxt);
   
