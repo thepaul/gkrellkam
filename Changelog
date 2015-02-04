@@ -1,6 +1,12 @@
 GKrellKam Changelog
 -------------------
 
+0.3.3 - Feb 1, 2001
+  * Fixed error message from not closing pipe after source read from
+    a script or external program
+  * Changed default webcam URL; the campus network was rearranged
+    a bit
+
 0.3.2 - Jan 7, 2001
   * Fixed segfault when wget fails- missing return statement
     after error message
@@ -11,7 +17,7 @@ GKrellKam Changelog
   * Added a popup menu to the internal viewer
   * Added a Save option and file selector to the internal viewer
   * Allow internal viewer window to be resized, and resize the
-     image inside (but when saving, save at original size)
+    image inside (but when saving, save at original size)
 
 0.3.0b - Dec 17, 2001
   * Fixed crash resulting when "Select Images at Random" is
