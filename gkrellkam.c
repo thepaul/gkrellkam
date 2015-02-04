@@ -31,6 +31,8 @@
 # include <gkrellm2/gkrellm.h>
 # include <libgen.h>
 # include <unistd.h>
+# include <sys/types.h>
+# include <sys/wait.h>
 #else
 # include <src/gkrellm.h>
 # include <src/win32-plugin.h>
@@ -538,6 +540,32 @@ static void kkam_internal_viewer (char *filename)
   gtk_widget_show_all (vi->window);
 }
 
+static void kkam_external_viewer (const char *filename)
+{
+  pid_t child;
+  int err;
+
+  switch ((child = fork ()))
+  {
+  case -1:
+    perror ("fork");
+    break;
+  case 0:
+    err = daemon (0, 1);
+    if (err != 0)
+    {
+      perror ("daemon");
+      _exit (100);
+    }
+    err = execlp (viewer_prog, viewer_prog, filename, (char *) NULL);
+    perror (viewer_prog);
+    _exit (101);
+    break;
+  default:
+    waitpid (child, NULL, 0);
+  }
+}
+
 /*
   validnum ()
 
@@ -1023,7 +1051,6 @@ wheel_callback(GtkWidget *widget, GdkEventScroll *ev)
 */
 static gint click_callback (GtkWidget *widget, GdkEventButton *ev, gpointer gw)
 {
-  gchar *cmd;
   int which;
   KKamSource *ks;
 
@@ -1041,11 +1068,7 @@ static gint click_callback (GtkWidget *widget, GdkEventButton *ev, gpointer gw)
       if (viewer_prog == NULL || viewer_prog[0] == '\0')
         kkam_internal_viewer (ks->tfile);
       else
-      {
-        cmd = g_strdup_printf ("%s '%s' &", viewer_prog, ks->tfile);
-        system (cmd);
-        g_free (cmd);
-      }
+        kkam_external_viewer (ks->tfile);
     }
     break;
   case 2: /* immediate update */
