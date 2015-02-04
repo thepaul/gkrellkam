@@ -1,0 +1,97 @@
+gkrellkam (2.0.0-1.1) unstable; urgency=low
+
+  * Non-maintainer upload.
+  * Fix "ftbfs with GCC-4.7": apply patch from Paul Tagliamonte (remove stray
+    "-Wl"). Closes: #667178
+
+ -- gregor herrmann <gregoa@debian.org>  Sun, 22 Apr 2012 14:56:34 +0200
+
+gkrellkam (2.0.0-1) unstable; urgency=low
+
+  * New upstream release- rewritten for gkrellm2. I had planned a
+    gkrellkam2 package for this, but it seems the old gkrellm is
+    now defunct, and the gkrellm package is really gkrellm2.
+    Whatever. (closes: #176116- gkrellkam is incompatible with
+    gkrellm)
+
+ -- paul cannon <pik@debian.org>  Fri, 10 Jan 2003 13:10:45 -0700
+
+gkrellkam (0.3.4-2) unstable; urgency=low
+
+  * Changed Build-Depends from gdk-imlib-dev to gdk-imlib1-dev
+    as per its maintainer's request
+
+ -- paul cannon <pik@debian.org>  Mon,  9 Sep 2002 18:23:17 -0600
+
+gkrellkam (0.3.4-1) unstable; urgency=low
+
+  * New upstream release
+  * No more need for a sponsor. Thanks, An!
+
+ -- paul cannon <pik@debian.org>  Tue, 19 Mar 2002 19:26:49 -0700
+
+gkrellkam (0.3.2-1) unstable; urgency=low
+
+  * New upstream release
+       (closes: Bug#128179- Segfault when wget fails)
+
+ -- paul cannon <paul@cannon.cs.usu.edu>  Mon,  7 Jan 2002 15:58:14 -0700
+
+gkrellkam (0.3.1-1) unstable; urgency=low
+
+  * New upstream release
+  * Fixed divide by zero problem
+       (closes: Bug#123786- Crash with select images from random
+        turned on)
+  * s/weathermaps/weather maps/ in description
+       (closes: Bug#124674- Spelling error in description)
+  * Self-contained image viewer is used by default
+       (closes: Bug#117979- gkrellkam lacks a Recommends or Suggested
+        dependency on eeyes)
+  * Added functionality to the internal viewer- now you can resize it,
+    save the image, etc
+  * Recognizes a "refresh" tag in lists
+       (closes: Bug#113246- would be nice if gkrellkam would download
+        images and cycle display at different rate)
+  * Manages temporary files sanely
+
+ -- paul cannon <paul@cannon.cs.usu.edu>  Wed, 19 Dec 2001 14:46:51 -0700
+
+gkrellkam (0.2.5-1) unstable; urgency=low
+
+  * New upstream release
+  * Now cleans out /tmp/krellkam* files left over from the last
+    time gkrellm died (there's no way to delete them at the time)
+  * Compiled for new GkrellM (>1.2.0)
+
+ -- paul cannon <paul@cannon.cs.usu.edu>  Fri, 26 Oct 2001 20:47:38 -0600
+
+gkrellkam (0.2.4-1) unstable; urgency=low
+
+  * New upstream release
+  * No longer uses any lockfiles (closes: Bug#111622)
+  * Packaging done by upstream author (in NM queue! :)
+
+ -- paul cannon <paul@cannon.cs.usu.edu>  Tue, 11 Sep 2001 14:44:55 -0600
+
+gkrellkam (0.2.0c-1) unstable; urgency=low
+
+  * New upstream release
+
+ -- An Thi-Nguyen Le <anle@debian.org>  Sat, 30 Jun 2001 14:55:43 -0500
+
+gkrellkam (0.2.0-1) unstable; urgency=low
+
+  * New upstream release
+
+ -- An Thi-Nguyen Le <anle@debian.org>  Fri, 22 Jun 2001 01:36:08 -0500
+
+gkrellkam (0.1.1d-1) unstable; urgency=low
+
+  * Initial Release.
+
+ -- An Thi-Nguyen Le <anle@debian.org>  Tue, 19 Jun 2001 18:52:27 -0500
+
+Local variables:
+mode: debian-changelog
+End:
