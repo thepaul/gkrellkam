@@ -812,7 +812,10 @@ static int cmd_results (KKamPanel *p)
   {
     /* if we get EAGAIN, wait some more */
     if (ferror (p->cmd_pipe) && errno == EAGAIN)
+    {
+      clearerr(p->cmd_pipe);
       return 0;
+    }
 
     /* if we reach here the pipe is dead- the command has finished. */
     code = pclose (p->cmd_pipe);
@@ -931,15 +934,15 @@ static int listurl_results (KKamPanel *p)
 {
   int code;
   char c;
-  KKamSource *ks;
-
-  ks = panel_cursource (p);
 
   if (fread (&c, sizeof (char), 1, p->listurl_pipe) < 1)
   {
     /* if we get EAGAIN, wait some more */
     if (ferror (p->listurl_pipe) && errno == EAGAIN)
+    {
+      clearerr(p->cmd_pipe);
       return 0;
+    }
 
     /* if we reach here the pipe is dead- the command has finished. */
     code = pclose (p->listurl_pipe);
@@ -2067,7 +2070,7 @@ static GkrellmMonitor kam_mon  =
 
   /* gkrellm now hooks INT and QUIT and exits nicely. This will work. */
 
-  g_atexit (kkam_cleanup);
+  atexit (kkam_cleanup);
  
   return (monitor = &kam_mon);
 }
