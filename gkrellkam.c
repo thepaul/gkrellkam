@@ -40,9 +40,9 @@
 */
 #if ((GKRELLM_VERSION_MAJOR == 1) && (GKRELLM_VERSION_MINOR >= 2))
 # define GKRELLM_1_2_0
-# define PLUGIN_VER "0.3.0/s2"
+# define PLUGIN_VER "0.3.0b/s2"
 #else
-# define PLUGIN_VER "0.3.0/s1"
+# define PLUGIN_VER "0.3.0b/s1"
 #endif
 
 #define PLUGIN_NAME "GKrellKam"
@@ -705,12 +705,13 @@ static int cmd_results (KKamPanel *p)
 static void rotate_sources (KKamPanel *p)
 {
   GList *link;
-  int times, i;
+  int times, i, len;
 
-  if (p == NULL || p->sources == NULL)
+  if (p == NULL || p->sources == NULL ||
+        (len = g_list_length (p->sources)) == 1)
     return;
 
-  times = p->random ? (rand () % (g_list_length (p->sources) - 1) + 1) : 1;
+  times = p->random ? (rand () % (len - 1) + 1) : 1;
   for (i = 0; i < times; i++)
   {
     link = p->sources;
