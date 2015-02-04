@@ -42,15 +42,15 @@ There are also \fBproperties\fP that can be applied to types \fIimage\fP,
 \fIurl\fP, and \fIscript\fP. Properties must follow the \fBimage source\fP
 line that they modify, and must begin with a tab character. These include:
 .PP
-.IP \fItooltip\fP [message]
+.IP "\fItooltip\fP [message]"
 This sets the message shown when the mouse is kept over the image panel
 in GKrellKam for a few seconds. If not set, the image's filename or URL
 is shown instead.
-.IP \fIseconds\fP [num]
+.IP "\fIseconds\fP [num]"
 This changes the number of seconds that an image will remain displayed.
 If not set, the "Default number of seconds" set for that panel in the
 GKrellM configuration window will be used.
-.IP \fIrefresh\fP [num]
+.IP "\fIrefresh\fP [num]"
 If set, this sets the minimum length of time that must elapse before the
 image is re-loaded. If the image cycles up before that time, the old
 image will be used. For \fBscript\fP types, this means that the script
