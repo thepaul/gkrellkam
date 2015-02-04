@@ -1,6 +1,10 @@
 GKrellKam Changelog
 -------------------
 
+0.3.2 - Jan 7, 2001
+  * Fixed segfault when wget fails- missing return statement
+    after error message
+
 0.3.1 - Dec 19, 2001
   * Changed WM_CLASS info for the internal viewer, to let window
     managers know the difference

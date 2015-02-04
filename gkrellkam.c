@@ -41,9 +41,9 @@
 #if (GKRELLM_VERSION_MAJOR > 1) || \
     ((GKRELLM_VERSION_MAJOR == 1) && (GKRELLM_VERSION_MINOR >= 2))
 # define GKRELLM_1_2_0
-# define PLUGIN_VER "0.3.1/s2"
+# define PLUGIN_VER "0.3.2/s2"
 #else
-# define PLUGIN_VER "0.3.1/s1"
+# define PLUGIN_VER "0.3.2/s1"
 #endif
 
 #define PLUGIN_NAME "GKrellKam"
@@ -830,6 +830,7 @@ static int cmd_results (KKamPanel *p)
 
     report_error (p, _("Error: wget gave bad code or script died. code %d"),
                   code);
+    return -1;
   }
   
   len = fread (&buf[1], sizeof (char), BUFLEN - 2, p->cmd_pipe);
