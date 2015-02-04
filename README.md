@@ -1,3 +1,14 @@
+# Please Note
+
+This code is almost old enough to drive.
+
+A few people still use it, though(!), and I still get patches from time to
+time. I guess I should finally at least put it on the Githubs and make it easy
+for those people to help each other out.
+
+Here's the text of the original README:
+
+```
 gkrellkam.so -- image watcher plugin for GKrellM
 Copyright (C) 2001-2002 paul cannon
 
@@ -53,7 +64,4 @@ code.
 
 Many, many thanks to Bill Wilson for doing the port to gkrellm2 (version
 2.0.0).
-
-See http://gkrellkam.sourceforge.net/ for more up-to-date info on this
-project. Bug reports, feature suggestions, and patches are welcome, if not
-always addressed.
+```
