@@ -52,7 +52,7 @@
 
 #define DEBUGGING 0
 
-static gchar *kkam_info_text[] = 
+static gchar *kkam_info_text[] =
 {
 "<b>" PLUGIN_NAME " " PLUGIN_VER "\n\n",
 
@@ -301,7 +301,7 @@ static void report_error (KKamPanel *p, char *fmt, ...)
 {
   va_list ap;
   char *str;
- 
+
   va_start (ap, fmt);
   str = g_strdup_vprintf (fmt, ap);
   va_end (ap);
@@ -321,7 +321,7 @@ static void report_error (KKamPanel *p, char *fmt, ...)
     gtk_container_set_border_width(GTK_CONTAINER(vbox), 8);
     gtk_box_pack_start(GTK_BOX(GTK_DIALOG(dialog)->vbox), vbox,
              FALSE, FALSE, 0);
-  
+
     label = gtk_label_new (_("GKrellKam warning:"));
     gtk_box_pack_start (GTK_BOX (vbox), label, FALSE, FALSE, 0);
     label = gtk_label_new (str);
@@ -371,7 +371,7 @@ static void kkam_iv_destroy (ViewerInfo *vi)
   kkam_iv_donesave ()
 
   Turns off the viewer's "Save as" file dialog and sets the pointer
-  to NULL  
+  to NULL
 */
 static void kkam_iv_donesave (ViewerInfo *vi)
 {
@@ -397,14 +397,14 @@ static void kkam_iv_dosave (ViewerInfo *vi)
   if ((s = strstr(fname, ".png")) != NULL)
     type = "png";
   else if ((s = strstr(fname, ".jpg")) != NULL)
-	type = "jpeg";
+    type = "jpeg";
   else if ((s = strstr(fname, ".jpeg")) != NULL)
-	type = "jpeg";
+    type = "jpeg";
   if (!type)
-    {
+  {
     report_error(NULL, "Saved images must be .jpg or .png only.\n", NULL);
     return;
-	}
+  }
 
   gdk_pixbuf_save(vi->pixbuf, fname, type, NULL, NULL);
   g_free (fname);
@@ -583,7 +583,7 @@ static KKamSource *panel_cursource (KKamPanel *p)
 static int get_period (KKamPanel *p)
 {
   int per;
-  
+
   if ((per = panel_cursource (p)->seconds) == 0)
     return p->default_period;
   return per;
@@ -610,7 +610,7 @@ static void tfile_release (KKamSource *ks)
 
 /*
   draw_pixbuf ()
-  
+
   renders the current image into the panel at the right size.
   aspect-scaling patch from Benjamin Johnson (benj@visi.com)- thanks
 */
@@ -676,7 +676,7 @@ static void draw_pixbuf (KKamPanel *p)
     loc_x = p->boundary;
     loc_y = p->boundary;
   }
-  
+
   gkrellm_destroy_decal (p->decal);
   gkrellm_scale_pixbuf_to_pixmap (p->pixbuf, &(p->pixmap), NULL,
                             scale_x, scale_y);
@@ -722,7 +722,7 @@ static void start_img_dl (KKamPanel *p)
     report_error (p, _("Couldn't start wget: %s"), strerror (errno));
     return;
   }
-  
+
   panel_cursource (p)->tfile = g_strdup (tmpfile);
   fcntl (fileno (p->cmd_pipe), F_SETFL, O_NONBLOCK);
 }
@@ -834,7 +834,7 @@ static int cmd_results (KKamPanel *p)
                   code);
     return -1;
   }
-  
+
   len = fread (&buf[1], sizeof (char), BUFLEN - 2, p->cmd_pipe);
   buf[len + 1] = '\0';
   g_strstrip (buf);
@@ -853,7 +853,7 @@ static int cmd_results (KKamPanel *p)
   {
     /* if we get here with wget, then wget said something. This is generally
        not good, since we passed -q. We'll have to wait for it to die */
-    
+
     report_error (p, _("wget said: \"%s\""), buf);
     return -1;
   }
@@ -892,13 +892,13 @@ static void rotate_sources (KKamPanel *p)
 static void update_image (KKamPanel *p)
 {
   KKamSource *ks;
-  
+
   p->count = get_period (p);
 
   ks = panel_cursource (p);
   if (ks->img_name == NULL || ks->img_name[0] == '\0')
     return;
- 
+
   if (ks->next_dl > time (NULL))
     load_image_file (p);
   else
@@ -1026,11 +1026,11 @@ static gint click_callback (GtkWidget *widget, GdkEventButton *ev, gpointer gw)
   gchar *cmd;
   int which;
   KKamSource *ks;
- 
+
   which = GPOINTER_TO_INT (gw);
   if (!activenum (which))
     return FALSE;
-  
+
   ks = panel_cursource (&panels[which]);
 
   switch (ev->button)
@@ -1101,14 +1101,14 @@ static void cb_height_spinner (gpointer w, KKamPanel *p)
 
   newheight = gtk_spin_button_get_value_as_int (
                                    GTK_SPIN_BUTTON (p->height_spinner));
-  
+
   if (newheight != p->height)
   {
     gkrellm_panel_configure_add_height (p->panel, newheight - p->height);
     p->height = newheight;
     gkrellm_panel_create (kkam_vbox, monitor, p->panel);
 
-    gkrellm_config_modified ();                            
+    gkrellm_config_modified ();
     draw_pixbuf (p);
   }
 }
@@ -1192,12 +1192,12 @@ static GtkWidget *create_configpanel_tab (int i)
                        (gfloat) panels[i].boundary,
                        0.0, 20.0, 1.0, 1.0, 0, 0, cb_boundary_spinner, &panels[i],
                        FALSE, _("Border size"));
-  
+
   gkrellm_gtk_check_button (hbox, &panels[i].aspect_box,
                         panels[i].maintain_aspect,
                         TRUE, 0, _("Maintain aspect ratio"));
   gtk_box_pack_start (GTK_BOX (vbox), hbox, TRUE, TRUE, 0);
-  
+
   g_signal_connect_swapped (G_OBJECT (panels[i].aspect_box), "toggled",
                         G_CALLBACK (cb_aspect_box), (gpointer)&panels[i]);
 
@@ -1238,16 +1238,16 @@ static void insert_configpanel_tab (int i)
 {
   GtkWidget *label, *configpanel;
   gchar *labeltxt;
-  
+
   if (!GTK_IS_OBJECT (tabs))
     return;
 
   configpanel = create_configpanel_tab (i);
-  
+
   labeltxt = g_strdup_printf (_("Panel #%i"), i + 1);
   label = gtk_label_new (labeltxt);
   g_free (labeltxt);
-  
+
   gtk_notebook_insert_page (GTK_NOTEBOOK (tabs), configpanel, label, i + 1);
 }
 
@@ -1273,7 +1273,7 @@ static void remove_configpanel_tab (int i)
 static void change_num_panels ()
 {
   int i;
-  
+
   if (numpanels == newnumpanels)
     return;
 
@@ -1311,7 +1311,7 @@ static void kkam_create_plugin (GtkWidget *vbox, gint first_create)
   int i;
 
   kkam_vbox = vbox;
-  
+
   if (first_create)
   {
     change_num_panels ();
@@ -1353,7 +1353,7 @@ static void kkam_create_plugin (GtkWidget *vbox, gint first_create)
             GINT_TO_POINTER (i));
       g_signal_connect (G_OBJECT (panels[i].panel->drawing_area),
             "scroll_event", G_CALLBACK (wheel_callback), NULL);
-            
+
       gkrellm_draw_panel_layers (panels[i].panel);
       if (i < numpanels)
         update_image (&panels[i]);
@@ -1453,7 +1453,7 @@ static SourceEnum source_type_of (char *def)
   FILE *test;
   gchar **words;
   unsigned char buf[BUFLEN];
-  
+
   words = g_strsplit (def, " ", 2);
   if (!words || !words[0]) /* wish I didn't need this */
     return SOURCE_FILE;
@@ -1492,7 +1492,7 @@ static SourceEnum source_type_of (char *def)
     g_strfreev (words);
     return SOURCE_LIST;
   }
-  
+
   if ((test = fopen (words[0], "r")) != NULL)
   {
     len = fread (buf, sizeof (buf[0]), BUFLEN, test);
@@ -1551,7 +1551,7 @@ static void kkam_read_list (KKamPanel *p, char *listname, int depth)
 
   if ((listfile = fopen (listname, "r")) == NULL)
     return;
-  
+
   while (fgets (buf, BUFLEN, listfile))
   {
     g_strchomp (buf);
@@ -1580,7 +1580,7 @@ static void kkam_read_list (KKamPanel *p, char *listname, int depth)
                            " with any source!"), listname, &buf[1]);
       }
       break;
-      
+
     default:
       if (!strncmp (buf, "image:", 6))
         ks = addto_sources_list (p, nextword (buf), SOURCE_FILE);
@@ -1638,7 +1638,7 @@ static void kkam_read_listurl (KKamPanel *p, char *source)
                   strerror (errno));
     return;
   }
-  
+
   p->listurl_file = g_strdup (tmpfile);
   fcntl (fileno (p->listurl_pipe), F_SETFL, O_NONBLOCK);
 
@@ -1694,7 +1694,7 @@ static void update_source_config (KKamPanel *p, char *val)
 
   g_strdelimit (val, " \t\n", '\n');
   words = g_strsplit (val, "\n", 0);
-  
+
   for (i = 0; words[i]; i++)
   {
     if (!strcmp (words[i], "-l") || !strcmp (words[i], "--list"))
@@ -1746,7 +1746,7 @@ static void update_script_config (KKamPanel *p, char *val)
   if (!rest)
     return;
   g_strstrip (rest);
-  
+
   /* If the old update_script item was using krellkam_load, parse
      its parameters. If it was using a different script, put it with
      the appropriate type into the source list */
@@ -1816,7 +1816,7 @@ static void kkam_load_config (gchar *arg)
               &(panels[which].boundary),
               &(panels[which].maintain_aspect),
               &(panels[which].random));
-      
+
       panels[which].height = CLAMP (panels[which].height, 10, 100);
       panels[which].default_period =
                            CLAMP (panels[which].default_period, 1, MAX_SECONDS);
@@ -1908,15 +1908,15 @@ static void kkam_create_tab (GtkWidget *tab_vbox)
 
   if (tabs)
     g_object_unref (G_OBJECT (tabs));
-  
-  tabs = gtk_notebook_new ();  
+
+  tabs = gtk_notebook_new ();
   gtk_notebook_set_tab_pos (GTK_NOTEBOOK (tabs), GTK_POS_TOP);
   gtk_box_pack_start (GTK_BOX (tab_vbox), tabs, TRUE, TRUE, 0);
   g_object_ref (G_OBJECT (tabs));
 
   /* main options tab */
   vbox = gkrellm_gtk_framed_notebook_page (tabs, _("Options"));
-  
+
   hbox = gtk_hbox_new (FALSE, 0);
   viewerbox = gtk_entry_new ();
   if (viewer_prog)
@@ -1927,7 +1927,7 @@ static void kkam_create_tab (GtkWidget *tab_vbox)
                       FALSE, FALSE, 10);
   gtk_box_pack_start (GTK_BOX (hbox), viewerbox, FALSE, FALSE, 0);
   gtk_box_pack_start (GTK_BOX (vbox), hbox, TRUE, FALSE, 0);
-  
+
   hbox = gtk_hbox_new (FALSE, 0);
   popup_errors_box = gtk_check_button_new_with_label (_("Popup errors"));
   gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (popup_errors_box),
@@ -1948,7 +1948,7 @@ static void kkam_create_tab (GtkWidget *tab_vbox)
                       gtk_label_new (_("Number of panels")),
                       FALSE, FALSE, 0);
   gtk_box_pack_start (GTK_BOX (vbox), hbox, TRUE, FALSE, 0);
-  
+
   /* individual panel options tabs */
   for (i = 0; i < MAX_NUMPANELS; i++)
   {
@@ -1957,7 +1957,7 @@ static void kkam_create_tab (GtkWidget *tab_vbox)
     tabname = g_strdup_printf (_("Panel #%d"), i + 1);
     tablabel = gtk_label_new (tabname);
     g_free (tabname);
-    
+
     if (i < numpanels)
       gtk_notebook_append_page (GTK_NOTEBOOK (tabs), configpanel, tablabel);
   }
@@ -2053,11 +2053,11 @@ static GkrellmMonitor kam_mon  =
 #endif
 {
   int i;
-  
+
   pGK = gkrellm_ticks();
   style_id = gkrellm_add_meter_style (&kam_mon, PLUGIN_STYLE);
   panels = g_new0 (KKamPanel, MAX_NUMPANELS);
-  
+
   /* the g_new0 initialized everything to 0- pretty convenient for
      almost everything.. */
 
@@ -2071,6 +2071,6 @@ static GkrellmMonitor kam_mon  =
   /* gkrellm now hooks INT and QUIT and exits nicely. This will work. */
 
   atexit (kkam_cleanup);
- 
+
   return (monitor = &kam_mon);
 }
