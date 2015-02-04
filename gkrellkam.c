@@ -1,6 +1,6 @@
 /*
   gkrellkam2 -- image watcher plugin for GKrellM
-  Copyright (C) 2001-2002 paul cannon
+  Copyright (C) 2001-2015 paul cannon
 
   This program is free software; you can redistribute it and/or
   modify it under the terms of the GNU General Public License
@@ -165,7 +165,7 @@ static gchar *kkam_info_text[] =
 static gchar *kkam_about_text = _(
   PLUGIN_NAME " " PLUGIN_VER
   "\n" PLUGIN_DESC
-  "\n\nCopyright (C) 2001 paul cannon\n"
+  "\n\nCopyright (C) 2001-2015 paul cannon\n"
   "pik@debian.org\n"
   "space software lab/utah state university\n\n"
   PLUGIN_NAME " comes with ABSOLUTELY NO WARRANTY;\n"

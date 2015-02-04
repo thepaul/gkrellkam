@@ -1,3 +1,15 @@
+gkrellkam (2.0.1-1) UNRELEASED; urgency=medium
+
+  * Fix handling of EAGAIN from wget invocation. Thanks to Bill Marr
+    for the patch.
+  * Fix missing words in the man page (closes: #350166- "typos in
+    gkrellkam-list.5 resulting in missing words"). Thanks to Nicolas
+    François for the patch.
+  * Update packaging for the 21st century (debhelper 9 style)
+  * Don't ship two nearly-identical copies of the source code.
+
+ -- paul cannon <pik@debian.org>  Wed, 04 Feb 2015 16:52:35 -0600
+
 gkrellkam (2.0.0-1.1) unstable; urgency=low
 
   * Non-maintainer upload.
