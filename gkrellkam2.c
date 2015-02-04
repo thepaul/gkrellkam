@@ -164,7 +164,7 @@ static gchar *kkam_about_text = _(
   PLUGIN_NAME " " PLUGIN_VER
   "\n" PLUGIN_DESC
   "\n\nCopyright (C) 2001 paul cannon\n"
-  "paul@cannon.cs.usu.edu\n"
+  "pik@debian.org\n"
   "space software lab/utah state university\n\n"
   PLUGIN_NAME " comes with ABSOLUTELY NO WARRANTY;\n"
   "see the file COPYING for details.\n\n"

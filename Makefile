@@ -1,5 +1,5 @@
 # Makefile for the GKrellKam gkrellm plugin
-# Copyright (C) 2001  paul cannon <paul@cannon.cs.usu.edu>
+# Copyright (C) 2001  paul cannon <pik@debian.org>
 #
 # Distributed under the GNU Public License- see COPYING
 # for details.
