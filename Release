@@ -1,13 +1,6 @@
-Notes for GKrellKam version 0.3.0:
+Notes for GKrellKam version 0.3.1:
 
-* Doesn't keep trying repeatedly if a download fails
-* Quotes URLs in wget command so that ampersands, etc work
-* Manages temporary files sanely
-* Includes code for an extremely basic image viewer
-* Recognizes the "refresh" tag in lists, to enable cycling
-  images more than once without redownloading
-* Now lets you give a URL to an online list in the Image
-  Source box
-
-(0.3.0b fixes a crash resulting when Select Images at Random
- is turned on for a non-list source)
+  Made some changes in the handling of the internal viewer. Added
+  a popup menu, a "save as" option, and allowed resizing. Any number
+  of internal viewer windows should be able to be open. See Changelog
+  for more info
