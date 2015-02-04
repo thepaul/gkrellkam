@@ -4,21 +4,20 @@
 # Distributed under the GNU Public License- see COPYING
 # for details.
 
-TARGET = gkrellkam
+TARGET = gkrellkam2
 
 # To facilitate packaging- leave blank for normal installation
 DESTDIR =
 
 # This should point to the GKrellM headers
-GKRELLM_HDRS = /usr/include/gkrellm
+GKRELLM_HDRS = /usr/include
 
 CC := gcc
-GTKFLAGS := $(shell gtk-config --cflags)
-IMLIBFLAGS := $(shell imlib-config --cflags-gdk)
-CFLAGS := $(CFLAGS) -fPIC -Wall $(GTKFLAGS) $(IMLIBFLAGS) -I$(GKRELLM_HDRS)
+GTKFLAGS := $(shell pkg-config gtk+-2.0 --cflags)
+CFLAGS := $(CFLAGS) -fPIC -Wall $(GTKFLAGS) -I$(GKRELLM_HDRS)
 LDFLAGS := -shared -Wl
-INST_DIR := $(DESTDIR)/usr/lib/gkrellm/plugins
-USER_INST_DIR := $(DESTDIR)$(HOME)/.gkrellm/plugins
+INST_DIR := $(DESTDIR)/usr/lib/gkrellm2/plugins
+USER_INST_DIR := $(DESTDIR)$(HOME)/.gkrellm2/plugins
 MANPAGES := gkrellkam-list.5
 MANPAGE_DIR := $(DESTDIR)/usr/share/man/man5
 

@@ -1,5 +1,5 @@
 gkrellkam.so -- image watcher plugin for GKrellM
-Copyright (C) 2001 paul cannon
+Copyright (C) 2001-2002 paul cannon
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -50,6 +50,9 @@ for each update, and GKrellKam will do the rest.
 
 Thanks to Benjamin Johnson (benj@visi.com) for some of the image scaling
 code.
+
+Many, many thanks to Bill Wilson for doing the port to gkrellm2 (version
+2.0.0).
 
 See http://gkrellkam.sourceforge.net/ for more up-to-date info on this
 project. Bug reports, feature suggestions, and patches are welcome, if not

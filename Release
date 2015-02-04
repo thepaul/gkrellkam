@@ -1,8 +1,5 @@
-Notes for GKrellKam version 0.3.3:
+Notes for GKrellKam version 2.0.0:
 
-  Fixed an error message resulting when using a script or external
-  program to determine the image source.
-
-For version 0.3.4:
-
-  Removed --proxy=off from the wget options
+  Bill Wilson did the entire port for me. I did look carefully through
+  his patch, and everything was just right. So I'm releasing 2.0.0 as it
+  is.

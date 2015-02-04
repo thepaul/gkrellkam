@@ -1,6 +1,6 @@
 /*
-  gkrellkam.so -- image watcher plugin for GKrellM
-  Copyright (C) 2001 paul cannon
+  gkrellkam2 -- image watcher plugin for GKrellM
+  Copyright (C) 2001-2002 paul cannon
 
   This program is free software; you can redistribute it and/or
   modify it under the terms of the GNU General Public License
@@ -18,7 +18,7 @@
       02111-1307, USA.
 
   To contact the author try:
-  <paul@cannon.cs.usu.edu>
+  paul cannon <pik@debian.org>
 
   A note on style here:
 
@@ -27,24 +27,20 @@
     g_free'd. Strings of type (char *) are static memory.
 */
 
-#include <gkrellm.h>
-#include <libgen.h>
-#include <unistd.h>
+#if !defined(WIN32)
+# include <gkrellm2/gkrellm.h>
+# include <libgen.h>
+# include <unistd.h>
+#else
+# include <src/gkrellm.h>
+# include <src/win32-plugin.h>
+#endif
+
 #include <errno.h>
 #include <stdlib.h>
 #include <time.h>
 
-/*
-  Determine gkrellm version- if >= 1.2.0, we can add some extra
-  features. Yippee!
-*/
-#if (GKRELLM_VERSION_MAJOR > 1) || \
-    ((GKRELLM_VERSION_MAJOR == 1) && (GKRELLM_VERSION_MINOR >= 2))
-# define GKRELLM_1_2_0
-# define PLUGIN_VER "0.3.4/s2"
-#else
-# define PLUGIN_VER "0.3.4/s1"
-#endif
+#define PLUGIN_VER "2.0.0"
 
 #define PLUGIN_NAME "GKrellKam"
 #define PLUGIN_DESC "GKrellM Image Watcher plugin"
@@ -72,11 +68,8 @@ static gchar *kkam_info_text[] =
 "the number. This is so you can hide panels you don't always want\n",
 "open."
 
-#ifdef GKRELLM_1_2_0
-" Your GKrellKam was compiled for the new GKrellM 1.2.x, so\n",
-"you can also ", "<b>right-click", " on a panel to open the configuration\n",
-"window.",
-#endif
+"You can also ", "<b>right-click", " on a panel to open the\n",
+"configuration window.",
 
 "\n\n",
 "<b>-- EASY START --\n\n",
@@ -217,8 +210,8 @@ typedef struct
 
 typedef struct
 {
-  Panel *panel;
-  Decal *decal;
+  GkrellmPanel *panel;
+  GkrellmDecal *decal;
   GdkPixmap *pixmap;
   FILE *cmd_pipe;
   int count;
@@ -235,7 +228,7 @@ typedef struct
   GtkWidget *aspect_box;
   GtkWidget *random_box;
   GtkWidget *sourcebox;
-  GdkImlibImage *imlibim;
+  GdkPixbuf *pixbuf;
 
   FILE *listurl_pipe;
   gchar *listurl_file;
@@ -250,17 +243,19 @@ typedef struct
   GtkWidget *menu;
   GtkWidget *pmap;
   GtkWidget *fdialog;
-  GdkImlibImage *image;
+  GdkPixbuf *pixbuf;
 } ViewerInfo;
 
-static Monitor *monitor;
+static GkrellmMonitor *monitor;
+
+static GkrellmTicks *pGK;
 
 static int created = 0;
 static int numpanels = 0;
 static int newnumpanels = 1;
 static KKamPanel *panels = NULL;
 
-static Style *img_style = NULL;
+static GkrellmStyle *img_style = NULL;
 static gint style_id;
 
 static char *viewer_prog = NULL;
@@ -313,25 +308,25 @@ static void report_error (KKamPanel *p, char *fmt, ...)
 
   if (popup_errors)
   {
-    GtkWidget *label, *button, *vbox, *dialog;
+    GtkWidget *label, *vbox, *dialog;
 
-    dialog = gtk_window_new (GTK_WINDOW_DIALOG);
+    dialog = gtk_dialog_new_with_buttons(_("GKrellKam warning:"),
+             NULL, GTK_DIALOG_DESTROY_WITH_PARENT,
+             GTK_STOCK_OK, GTK_RESPONSE_NONE,
+             NULL);
+    g_signal_connect_swapped(GTK_OBJECT(dialog), "response",
+             G_CALLBACK(gtk_widget_destroy), GTK_OBJECT(dialog));
+
     vbox = gtk_vbox_new (FALSE, 0);
+    gtk_container_set_border_width(GTK_CONTAINER(vbox), 8);
+    gtk_box_pack_start(GTK_BOX(GTK_DIALOG(dialog)->vbox), vbox,
+             FALSE, FALSE, 0);
   
     label = gtk_label_new (_("GKrellKam warning:"));
     gtk_box_pack_start (GTK_BOX (vbox), label, FALSE, FALSE, 0);
     label = gtk_label_new (str);
     gtk_box_pack_start (GTK_BOX (vbox), label, FALSE, FALSE, 0);
 
-    button = gtk_button_new_with_label (_("  OK  "));  
-    gtk_box_pack_start (GTK_BOX (vbox), button, FALSE, FALSE, 0);
-    gtk_container_add (GTK_CONTAINER (dialog), vbox);
-  
-    gtk_signal_connect_object (GTK_OBJECT (button), "clicked",
-                               GTK_SIGNAL_FUNC (gtk_widget_destroy),
-                               (gpointer)dialog);
-  
-    gtk_container_set_border_width (GTK_CONTAINER (dialog), 15);
     gtk_widget_show_all (dialog);
   }
   else
@@ -352,9 +347,9 @@ static void kkam_add_menu_item (GtkWidget *menu, char *label,
   GtkWidget *mi;
 
   mi = gtk_menu_item_new_with_label (label);
-  gtk_signal_connect_object (GTK_OBJECT (mi), "activate", cb, d);
+  g_signal_connect_swapped (G_OBJECT (mi), "activate", G_CALLBACK(cb), d);
   gtk_widget_show (mi);
-  gtk_menu_append (GTK_MENU (menu), mi);
+  gtk_menu_shell_append (GTK_MENU_SHELL (menu), mi);
 }
 
 /*
@@ -366,7 +361,7 @@ static void kkam_iv_destroy (ViewerInfo *vi)
 {
   if (vi->fdialog)
     gtk_widget_destroy (vi->fdialog);
-  gdk_imlib_destroy_image (vi->image);
+  g_object_unref (G_OBJECT(vi->pixbuf));
   gtk_widget_destroy (vi->menu);
   gtk_widget_destroy (vi->window);
   g_free (vi);
@@ -389,15 +384,29 @@ static void kkam_iv_donesave (ViewerInfo *vi)
 
   Called when user hits ok on the "Save as" file dialog. Gets the
   filename, closes the file dialog, and saves the image appropriately.
+  gdk_pixbuf_save() supports only "png" or "jpeg" in Gtk+-2.0.
 */
 static void kkam_iv_dosave (ViewerInfo *vi)
 {
   gchar *fname;
+  char  *type = NULL, *s;
 
   fname = g_strdup (
        gtk_file_selection_get_filename (GTK_FILE_SELECTION (vi->fdialog)));
   kkam_iv_donesave (vi);
-  gdk_imlib_save_image (vi->image, fname, NULL);
+  if ((s = strstr(fname, ".png")) != NULL)
+    type = "png";
+  else if ((s = strstr(fname, ".jpg")) != NULL)
+	type = "jpeg";
+  else if ((s = strstr(fname, ".jpeg")) != NULL)
+	type = "jpeg";
+  if (!type)
+    {
+    report_error(NULL, "Saved images must be .jpg or .png only.\n", NULL);
+    return;
+	}
+
+  gdk_pixbuf_save(vi->pixbuf, fname, type, NULL, NULL);
   g_free (fname);
 }
 
@@ -417,14 +426,14 @@ static void kkam_iv_saveas (ViewerInfo *vi)
 
   vi->fdialog = gtk_file_selection_new (_("Save As:"));
 
-  gtk_signal_connect_object (
-           GTK_OBJECT (GTK_FILE_SELECTION (vi->fdialog)->ok_button),
+  g_signal_connect_swapped (
+           G_OBJECT (GTK_FILE_SELECTION (vi->fdialog)->ok_button),
            "clicked",
-           GTK_SIGNAL_FUNC (kkam_iv_dosave), (gpointer)vi);
-  gtk_signal_connect_object (
-           GTK_OBJECT (GTK_FILE_SELECTION (vi->fdialog)->cancel_button),
+           G_CALLBACK (kkam_iv_dosave), (gpointer)vi);
+  g_signal_connect_swapped (
+           G_OBJECT (GTK_FILE_SELECTION (vi->fdialog)->cancel_button),
            "clicked",
-           GTK_SIGNAL_FUNC (kkam_iv_donesave), (gpointer)vi);
+           G_CALLBACK (kkam_iv_donesave), (gpointer)vi);
   gtk_widget_show (vi->fdialog);
 }
 
@@ -464,15 +473,16 @@ static gint kkam_iv_popup (ViewerInfo *vi, GdkEventButton *ev)
 */
 static gint kkam_iv_resize (ViewerInfo *vi, GdkEventConfigure *ev)
 {
-  GdkPixmap *pix;
-  GdkBitmap *bit;
+  GdkPixmap *pix = NULL;
+  GdkBitmap *bit = NULL;
 
-  gdk_imlib_render (vi->image, ev->width, ev->height);
-  pix = gdk_imlib_copy_image (vi->image);
-  bit = gdk_imlib_copy_mask (vi->image);
-  gtk_pixmap_set (GTK_PIXMAP (vi->pmap), pix, bit);
-  gdk_imlib_free_pixmap (pix);
-  gdk_imlib_free_pixmap (bit);
+  gkrellm_scale_pixbuf_to_pixmap(vi->pixbuf, &pix, &bit,
+                      ev->width, ev->height);
+
+  gtk_image_set_from_pixmap (GTK_IMAGE (vi->pmap), pix, bit);
+  g_object_unref(G_OBJECT(pix));
+  if (bit)
+    g_object_unref(G_OBJECT(bit));
 
   return TRUE;
 }
@@ -486,12 +496,12 @@ static gint kkam_iv_resize (ViewerInfo *vi, GdkEventConfigure *ev)
 static void kkam_internal_viewer (char *filename)
 {
   GtkWidget *ebox;
-  GdkPixmap *pix;
-  GdkBitmap *bit;
+  GdkPixmap *pix = NULL;
+  GdkBitmap *bit = NULL;
   ViewerInfo *vi;
 
   vi = g_new0 (ViewerInfo, 1);
-  if ((vi->image = gdk_imlib_load_image (filename)) == NULL)
+  if ((vi->pixbuf = gdk_pixbuf_new_from_file (filename, NULL)) == NULL)
   {
     g_free (vi);
     return;
@@ -501,27 +511,30 @@ static void kkam_internal_viewer (char *filename)
   kkam_iv_makemenu (vi);
   vi->window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
   gtk_window_set_title (GTK_WINDOW (vi->window), filename);
-  gtk_signal_connect_object (GTK_OBJECT (vi->window), "delete_event",
-                             GTK_SIGNAL_FUNC (kkam_iv_destroy),
+  g_signal_connect_swapped (G_OBJECT (vi->window), "delete_event",
+                             G_CALLBACK (kkam_iv_destroy),
                              (gpointer)vi);
-  gtk_signal_connect_object (GTK_OBJECT (vi->window), "configure_event",
-                             GTK_SIGNAL_FUNC (kkam_iv_resize),
+  g_signal_connect_swapped (G_OBJECT (vi->window), "configure_event",
+                             G_CALLBACK (kkam_iv_resize),
                              (gpointer)vi);
-  gtk_window_set_policy (GTK_WINDOW (vi->window), TRUE, TRUE, FALSE);
+//  gtk_window_set_policy (GTK_WINDOW (vi->window), TRUE, TRUE, FALSE);
   gtk_window_set_wmclass (GTK_WINDOW (vi->window), "KKamViewer", "GKrellm");
 
-  gdk_imlib_render (vi->image, vi->image->rgb_width, vi->image->rgb_height);
-  pix = gdk_imlib_copy_image (vi->image);
-  bit = gdk_imlib_copy_mask (vi->image);
-  vi->pmap = gtk_pixmap_new (pix, bit);
-  gdk_imlib_free_pixmap (pix);
-  gdk_imlib_free_pixmap (bit);
+  gkrellm_scale_pixbuf_to_pixmap(vi->pixbuf, &pix, &bit,
+                      gdk_pixbuf_get_width(vi->pixbuf),
+                      gdk_pixbuf_get_height(vi->pixbuf));
+
+  vi->pmap = gtk_image_new_from_pixmap(pix, bit);
+  g_object_unref(G_OBJECT(pix));
+  if (bit)
+    g_object_unref(G_OBJECT(bit));
+
   ebox = gtk_event_box_new ();
   gtk_container_add (GTK_CONTAINER (ebox), vi->pmap);
   gtk_container_add (GTK_CONTAINER (vi->window), ebox);
   gtk_widget_set_events (ebox, GDK_BUTTON_PRESS_MASK);
-  gtk_signal_connect_object (GTK_OBJECT (ebox), "button_press_event",
-                             GTK_SIGNAL_FUNC (kkam_iv_popup), (gpointer)vi);
+  g_signal_connect_swapped (G_OBJECT (ebox), "button_press_event",
+                             G_CALLBACK (kkam_iv_popup), (gpointer)vi);
   gtk_widget_show_all (vi->window);
 }
 
@@ -596,56 +609,48 @@ static void tfile_release (KKamSource *ks)
 }
 
 /*
-  draw_imlibim ()
+  draw_pixbuf ()
   
   renders the current image into the panel at the right size.
   aspect-scaling patch from Benjamin Johnson (benj@visi.com)- thanks
 */
-static void draw_imlibim (KKamPanel *p)
+static void draw_pixbuf (KKamPanel *p)
 {
   int pan_x, pan_y;       /* panel x and y sizes */
   int scale_x, scale_y;   /* size of scaled image */
   int loc_x, loc_y;       /* location for scaled image */
+  int image_w, image_h;
 
-  if (p->imlibim == NULL)
+  if (p->pixbuf == NULL)
     return;
 
   pan_x = gkrellm_chart_width () - 2 * p->boundary;
   pan_y = p->height - 2 * p->boundary;
 
-#ifndef GKRELLM_1_2_0
-  /* need to blank out the old image here for the old gkrellm. */
-  gkrellm_render_to_pixmap (gkrellm_bg_meter_image (style_id),
-                            &(p->pixmap), NULL,
-                            gkrellm_chart_width (), p->height);
-  gkrellm_destroy_decal_list (p->panel);
-  p->decal = gkrellm_create_decal_pixmap (p->panel, p->pixmap,
-                                          NULL, 1, img_style, 0, 0);
-  gkrellm_draw_decal_pixmap (p->panel, p->decal, 0);
-  gkrellm_draw_layers (p->panel);
-#endif
-  
+  image_w = gdk_pixbuf_get_width(p->pixbuf);
+  image_h = gdk_pixbuf_get_height(p->pixbuf);
+
   if (p->maintain_aspect)
   {
     /* determine sizing here - maintain aspect ratio */
 
-    if (pan_x >= p->imlibim->rgb_width && pan_y >= p->imlibim->rgb_height)
+    if (pan_x >= image_w && pan_y >= image_h)
     {
       /* the image is smaller then the panel. do no sizing, just center. */
 
-      loc_x = (pan_x - p->imlibim->rgb_width) / 2 + p->boundary;
-      loc_y = (pan_y - p->imlibim->rgb_height) / 2 + p->boundary;
+      loc_x = (pan_x - image_w) / 2 + p->boundary;
+      loc_y = (pan_y - image_h) / 2 + p->boundary;
 
       scale_x = 0; /* scale of 0 defaults to use image size */
       scale_y = 0;
     }
-    else if ((double)p->imlibim->rgb_width / (double)pan_x >
-             (double)p->imlibim->rgb_height / (double)pan_y)
+    else if ((double) image_w / (double)pan_x >
+             (double) image_h / (double)pan_y)
     {
       /* scale to width (image is wider compared to panel size) */
 
       scale_x = pan_x;
-      scale_y = p->imlibim->rgb_height * pan_x / p->imlibim->rgb_width;
+      scale_y = image_h * pan_x / image_w;
 
       loc_x = p->boundary;
       loc_y = (pan_y - scale_y) / 2 + p->boundary;
@@ -654,7 +659,7 @@ static void draw_imlibim (KKamPanel *p)
     {
       /* scale to height (image is taller compared to panel size) */
 
-      scale_x = p->imlibim->rgb_width * pan_y / p->imlibim->rgb_height;
+      scale_x = image_w * pan_y / image_h;
       scale_y = pan_y;
 
       loc_x = (pan_x - scale_x) / 2 + p->boundary;
@@ -672,20 +677,14 @@ static void draw_imlibim (KKamPanel *p)
     loc_y = p->boundary;
   }
   
-#ifdef GKRELLM_1_2_0
-  gkrellm_remove_and_destroy_decal (p->panel, p->decal);
-  gkrellm_render_to_pixmap (p->imlibim, &(p->pixmap), NULL,
+  gkrellm_destroy_decal (p->decal);
+  gkrellm_scale_pixbuf_to_pixmap (p->pixbuf, &(p->pixmap), NULL,
                             scale_x, scale_y);
-#else
-  gkrellm_render_to_pixmap (p->imlibim, &(p->pixmap), NULL,
-                            scale_x, scale_y);
-  gkrellm_destroy_decal_list (p->panel);
-#endif
 
   p->decal = gkrellm_create_decal_pixmap (p->panel, p->pixmap,
                                           NULL, 1, img_style, loc_x, loc_y);
   gkrellm_draw_decal_pixmap (p->panel, p->decal, 0);
-  gkrellm_draw_layers (p->panel);
+  gkrellm_draw_panel_layers (p->panel);
 }
 
 /*
@@ -757,8 +756,8 @@ static void start_script_dl (KKamPanel *p)
 /*
   load_image_file ()
 
-  If the file in p's cursource exists, loads it into p's imlibim
-  member. Calls draw_imlibim. Also, sets image tooltip.
+  If the file in p's cursource exists, loads it into p's pixbuf
+  member. Calls draw_pixbuf. Also, sets image tooltip.
 
   Returns -1 on file missing, and 1 otherwise (not necessarily
     success, but probably)
@@ -778,10 +777,10 @@ static int load_image_file (KKamPanel *p)
     return -1;
   }
 
-  if (p->imlibim)
-    gdk_imlib_kill_image (p->imlibim);
-  p->imlibim = gdk_imlib_load_image (ks->tfile);
-  draw_imlibim (p);
+  if (p->pixbuf)
+    g_object_unref (G_OBJECT(p->pixbuf));
+  p->pixbuf = gdk_pixbuf_new_from_file (ks->tfile, NULL);
+  draw_pixbuf (p);
 
   if (ks->tooltip)
     gtk_tooltips_set_tip (tooltipobj, p->panel->drawing_area,
@@ -976,7 +975,7 @@ static void kkam_update_plugin ()
 {
   int i;
 
-  if (GK.second_tick)
+  if (pGK->second_tick)
     for (i = 0; i < numpanels; i++)
     {
       if (panels[i].listurl_pipe)
@@ -995,6 +994,22 @@ void showsource (KKamSource *s)
 {
   fprintf (stderr, "name %s, type %d, seconds %d, tooltip %s\n",
                    s->img_name, s->type, s->seconds, s->tooltip);
+}
+
+static gint
+wheel_callback(GtkWidget *widget, GdkEventScroll *ev)
+{
+  if (ev->direction == GDK_SCROLL_UP)
+  {
+    newnumpanels = MIN (numpanels + 1, MAX_NUMPANELS);
+    change_num_panels ();
+  }
+  else if (ev->direction == GDK_SCROLL_DOWN)
+  {
+    newnumpanels = MAX (numpanels - 1, MIN_NUMPANELS);
+    change_num_panels ();
+  }
+  return TRUE;
 }
 
 /*
@@ -1035,20 +1050,10 @@ static gint click_callback (GtkWidget *widget, GdkEventButton *ev, gpointer gw)
     ks->next_dl = 0;
     break;
 
-#ifdef GKRELLM_1_2_0
   case 3:
     gkrellm_open_config_window (monitor);
     break;
-#endif
 
-  case 4:
-    newnumpanels = MIN (numpanels + 1, MAX_NUMPANELS);
-    change_num_panels ();
-    break;
-  case 5:
-    newnumpanels = MAX (numpanels - 1, MIN_NUMPANELS);
-    change_num_panels ();
-    break;
   }
   return FALSE;
 }
@@ -1063,7 +1068,7 @@ static gint panel_expose_event (GtkWidget *widget,
   if (!activenum (which))
     return FALSE;
 
-  gdk_draw_pixmap (widget->window,
+  gdk_draw_drawable (widget->window,
        widget->style->fg_gc[GTK_WIDGET_STATE (widget)],
        panels[which].panel->pixmap,
        ev->area.x, ev->area.y, ev->area.x, ev->area.y,
@@ -1076,7 +1081,7 @@ static void cb_aspect_box (KKamPanel *p)
 {
   p->maintain_aspect = GTK_TOGGLE_BUTTON (p->aspect_box)->active;
   gkrellm_config_modified ();
-  draw_imlibim (p);
+  draw_pixbuf (p);
 }
 
 static void cb_boundary_spinner (gpointer w, KKamPanel *p)
@@ -1084,7 +1089,7 @@ static void cb_boundary_spinner (gpointer w, KKamPanel *p)
   p->boundary = gtk_spin_button_get_value_as_int
                                  (GTK_SPIN_BUTTON (p->boundary_spinner));
   gkrellm_config_modified ();
-  draw_imlibim (p);
+  draw_pixbuf (p);
 }
 
 static void cb_height_spinner (gpointer w, KKamPanel *p)
@@ -1096,21 +1101,12 @@ static void cb_height_spinner (gpointer w, KKamPanel *p)
   
   if (newheight != p->height)
   {
-#ifdef GKRELLM_1_2_0
     gkrellm_panel_configure_add_height (p->panel, newheight - p->height);
     p->height = newheight;
     gkrellm_panel_create (kkam_vbox, monitor, p->panel);
-#else
-    gkrellm_monitor_height_adjust (newheight - p->height);
-    p->panel->label->h_panel = newheight;
-    p->height = newheight;
-    gkrellm_create_panel (kkam_vbox, p->panel,
-                          gkrellm_bg_meter_image (style_id));
-    gkrellm_pack_side_frames ();
-#endif
 
     gkrellm_config_modified ();                            
-    draw_imlibim (p);
+    draw_pixbuf (p);
   }
 }
 
@@ -1140,13 +1136,13 @@ static void src_set (KKamPanel *p)
 static void srcbrowse (KKamPanel *p)
 {
   filebox = gtk_file_selection_new (_("Select Image Source"));
-  gtk_signal_connect_object (
-                     GTK_OBJECT (GTK_FILE_SELECTION (filebox)->ok_button),
-                     "clicked", GTK_SIGNAL_FUNC (src_set), (gpointer)p);
-  gtk_signal_connect_object (
-                     GTK_OBJECT (GTK_FILE_SELECTION (filebox)->cancel_button),
+  g_signal_connect_swapped (
+                     G_OBJECT (GTK_FILE_SELECTION (filebox)->ok_button),
+                     "clicked", G_CALLBACK (src_set), (gpointer)p);
+  g_signal_connect_swapped (
+                     G_OBJECT (GTK_FILE_SELECTION (filebox)->cancel_button),
                      "clicked",
-                     GTK_SIGNAL_FUNC (gtk_widget_destroy),
+                     G_CALLBACK (gtk_widget_destroy),
                      (gpointer)filebox);
 
   gtk_widget_show (filebox);
@@ -1178,31 +1174,31 @@ static GtkWidget *create_configpanel_tab (int i)
 
   vbox = gtk_vbox_new (FALSE, 0);
 
-  gkrellm_spin_button (vbox, &panels[i].period_spinner,
+  gkrellm_gtk_spin_button (vbox, &panels[i].period_spinner,
                        (gfloat) panels[i].default_period,
                        1.0, (gfloat)MAX_SECONDS, 1.0, 10.0, 0, 0, NULL, NULL,
                        FALSE, _("Default number of seconds per update"));
 
-  gkrellm_spin_button (vbox, &panels[i].height_spinner,
+  gkrellm_gtk_spin_button (vbox, &panels[i].height_spinner,
                        (gfloat) panels[i].height,
                        10.0, 100.0, 1.0, 5.0, 0, 0, cb_height_spinner, &panels[i],
                        FALSE, _("Height of viewer, in pixels"));
 
   hbox = gtk_hbox_new (FALSE, 0);
-  gkrellm_spin_button (hbox, &panels[i].boundary_spinner,
+  gkrellm_gtk_spin_button (hbox, &panels[i].boundary_spinner,
                        (gfloat) panels[i].boundary,
                        0.0, 20.0, 1.0, 1.0, 0, 0, cb_boundary_spinner, &panels[i],
                        FALSE, _("Border size"));
   
-  gkrellm_check_button (hbox, &panels[i].aspect_box,
+  gkrellm_gtk_check_button (hbox, &panels[i].aspect_box,
                         panels[i].maintain_aspect,
                         TRUE, 0, _("Maintain aspect ratio"));
   gtk_box_pack_start (GTK_BOX (vbox), hbox, TRUE, TRUE, 0);
   
-  gtk_signal_connect_object (GTK_OBJECT (panels[i].aspect_box), "toggled",
-                        GTK_SIGNAL_FUNC (cb_aspect_box), (gpointer)&panels[i]);
+  g_signal_connect_swapped (G_OBJECT (panels[i].aspect_box), "toggled",
+                        G_CALLBACK (cb_aspect_box), (gpointer)&panels[i]);
 
-  gkrellm_check_button (vbox, &panels[i].random_box,
+  gkrellm_gtk_check_button (vbox, &panels[i].random_box,
                         panels[i].random,
                         TRUE, 0, _("Select list images at random"));
 
@@ -1210,10 +1206,9 @@ static GtkWidget *create_configpanel_tab (int i)
   sourcelabel = gtk_label_new (_("Image source:  "));
   panels[i].sourcebox = gtk_entry_new ();
   gtk_entry_set_text (GTK_ENTRY (panels[i].sourcebox), panels[i].source);
-  gtk_entry_set_editable (GTK_ENTRY (panels[i].sourcebox), TRUE);
   button = gtk_button_new_with_label (_("Browse.."));
-  gtk_signal_connect_object (GTK_OBJECT (button), "clicked",
-                             GTK_SIGNAL_FUNC (srcbrowse), (gpointer)&panels[i]);
+  g_signal_connect_swapped (G_OBJECT (button), "clicked",
+                             G_CALLBACK (srcbrowse), (gpointer)&panels[i]);
   gtk_box_pack_start (GTK_BOX (hbox), sourcelabel, FALSE, FALSE, 0);
   gtk_box_pack_start (GTK_BOX (hbox), panels[i].sourcebox, TRUE, TRUE, 0);
   gtk_box_pack_start (GTK_BOX (hbox), button, FALSE, FALSE, 0);
@@ -1221,8 +1216,8 @@ static GtkWidget *create_configpanel_tab (int i)
 
   hbox = gtk_hbox_new (FALSE, 5);
   button = gtk_button_new_with_label (_("Reread source"));
-  gtk_signal_connect_object (GTK_OBJECT (button), "clicked",
-                             GTK_SIGNAL_FUNC (srcreread), (gpointer)&panels[i]);
+  g_signal_connect_swapped (G_OBJECT (button), "clicked",
+                             G_CALLBACK (srcreread), (gpointer)&panels[i]);
   gtk_box_pack_start (GTK_BOX (hbox), button, TRUE, TRUE, 0);
   gtk_box_pack_start (GTK_BOX (vbox), hbox, TRUE, FALSE, 0);
 
@@ -1293,14 +1288,8 @@ static void change_num_panels ()
 
     for (i = 0; i < MAX_NUMPANELS; i++)
     {
-#ifdef GKRELLM_1_2_0
       gkrellm_panel_enable_visibility (panels[i].panel, i < newnumpanels,
                                        &(panels[i].visible));
-#else
-      gkrellm_enable_visibility (i < newnumpanels, &(panels[i].visible),
-                                 panels[i].panel->drawing_area,
-                                 panels[i].panel->h);
-#endif
     }
 
     for (i = numpanels; i < newnumpanels; i++)
@@ -1329,7 +1318,6 @@ static void kkam_create_plugin (GtkWidget *vbox, gint first_create)
       panels[i].panel = gkrellm_panel_new0 ();
 
     tooltipobj = gtk_tooltips_new ();
-    gtk_tooltips_set_delay (tooltipobj, 1000);
 
     srand (time (NULL)); /* randomize from timer */
   }
@@ -1338,29 +1326,15 @@ static void kkam_create_plugin (GtkWidget *vbox, gint first_create)
 
   for (i = 0; i < MAX_NUMPANELS; i++)
   {
-#ifdef GKRELLM_1_2_0
     gkrellm_panel_configure_add_height (panels[i].panel, panels[i].height);
     gkrellm_panel_create (vbox, monitor, panels[i].panel);
     gkrellm_panel_keep_lists (panels[i].panel, TRUE);
-#else
-    panels[i].panel->textstyle = gkrellm_meter_textstyle (style_id);
-    panels[i].panel->label->h_panel = panels[i].height;
-    gkrellm_create_panel (vbox, panels[i].panel,
-                          gkrellm_bg_meter_image (style_id));
-    gkrellm_monitor_height_adjust (panels[i].panel->h);
-#endif
 
     panels[i].visible = TRUE;
     if (i >= numpanels)
     {
-#ifdef GKRELLM_1_2_0
       gkrellm_panel_enable_visibility (panels[i].panel, FALSE,
                                        &(panels[i].visible));
-#else
-      gkrellm_enable_visibility (FALSE, &(panels[i].visible),
-                                 panels[i].panel->drawing_area,
-                                 panels[i].panel->h);
-#endif
     }
   }
 
@@ -1368,14 +1342,16 @@ static void kkam_create_plugin (GtkWidget *vbox, gint first_create)
   {
     for (i = 0; i < MAX_NUMPANELS; i++)
     {
-      gtk_signal_connect (GTK_OBJECT (panels[i].panel->drawing_area),
-            "expose_event", GTK_SIGNAL_FUNC (panel_expose_event),
+      g_signal_connect (G_OBJECT (panels[i].panel->drawing_area),
+            "expose_event", G_CALLBACK (panel_expose_event),
             GINT_TO_POINTER (i));
-      gtk_signal_connect (GTK_OBJECT (panels[i].panel->drawing_area),
-            "button_press_event", GTK_SIGNAL_FUNC (click_callback),
+      g_signal_connect (G_OBJECT (panels[i].panel->drawing_area),
+            "button_press_event", G_CALLBACK (click_callback),
             GINT_TO_POINTER (i));
+      g_signal_connect (G_OBJECT (panels[i].panel->drawing_area),
+            "scroll_event", G_CALLBACK (wheel_callback), NULL);
             
-      gkrellm_draw_layers (panels[i].panel);
+      gkrellm_draw_panel_layers (panels[i].panel);
       if (i < numpanels)
         update_image (&panels[i]);
     }
@@ -1386,7 +1362,7 @@ static void kkam_create_plugin (GtkWidget *vbox, gint first_create)
       if (panels[i].decal && panels[i].decal->pixmap)
       {
         gkrellm_draw_decal_pixmap (panels[i].panel, panels[i].decal, 0);
-        gkrellm_draw_layers (panels[i].panel);
+        gkrellm_draw_panel_layers (panels[i].panel);
       }
   }
 }
@@ -1921,28 +1897,27 @@ static void cb_numpanel_spinner ()
 static void kkam_create_tab (GtkWidget *tab_vbox)
 {
   GtkWidget *vbox, *tablabel;
-  GtkWidget *scrolled, *text;
+  GtkWidget *text;
   GtkWidget *hbox, *configpanel, *about;
   GtkAdjustment *numadj;
   gchar *tabname;
   int i;
 
   if (tabs)
-    gtk_object_unref (GTK_OBJECT (tabs));
+    g_object_unref (G_OBJECT (tabs));
   
   tabs = gtk_notebook_new ();  
   gtk_notebook_set_tab_pos (GTK_NOTEBOOK (tabs), GTK_POS_TOP);
   gtk_box_pack_start (GTK_BOX (tab_vbox), tabs, TRUE, TRUE, 0);
-  gtk_object_ref (GTK_OBJECT (tabs));
+  g_object_ref (G_OBJECT (tabs));
 
   /* main options tab */
-  vbox = gkrellm_create_tab (tabs, _("Options"));
+  vbox = gkrellm_gtk_framed_notebook_page (tabs, _("Options"));
   
   hbox = gtk_hbox_new (FALSE, 0);
   viewerbox = gtk_entry_new ();
   if (viewer_prog)
     gtk_entry_set_text (GTK_ENTRY (viewerbox), viewer_prog);
-  gtk_entry_set_editable (GTK_ENTRY (viewerbox), TRUE);
 
   gtk_box_pack_start (GTK_BOX (hbox),
                       gtk_label_new (_("Path to image viewer program:")),
@@ -1962,8 +1937,8 @@ static void kkam_create_tab (GtkWidget *tab_vbox)
                              (gfloat) MAX_NUMPANELS,
                              1.0, 1.0, 0);
   numpanel_spinner = gtk_spin_button_new (numadj, 1.0, 0);
-  gtk_signal_connect (GTK_OBJECT (numpanel_spinner), "changed",
-                      GTK_SIGNAL_FUNC (cb_numpanel_spinner), NULL);
+  g_signal_connect (G_OBJECT (numpanel_spinner), "changed",
+                      G_CALLBACK (cb_numpanel_spinner), NULL);
   hbox = gtk_hbox_new (FALSE, 0);
   gtk_box_pack_start (GTK_BOX (hbox), numpanel_spinner, FALSE, FALSE, 10);
   gtk_box_pack_start (GTK_BOX (hbox),
@@ -1985,20 +1960,16 @@ static void kkam_create_tab (GtkWidget *tab_vbox)
   }
 
   /* Info tab */
-  vbox = gkrellm_create_tab (tabs, _("Info"));
-  scrolled = gtk_scrolled_window_new (NULL, NULL);
-  gtk_scrolled_window_set_policy (GTK_SCROLLED_WINDOW (scrolled),
-                                  GTK_POLICY_AUTOMATIC,
-                                  GTK_POLICY_AUTOMATIC);
-  gtk_box_pack_start (GTK_BOX (vbox), scrolled, TRUE, TRUE, 0);
-  text = gtk_text_new (NULL, NULL);
-  gkrellm_add_info_text (text, kkam_info_text,
-                          sizeof (kkam_info_text) / sizeof (gchar *));
-  gtk_text_set_editable (GTK_TEXT (text), FALSE);
-  gtk_container_add (GTK_CONTAINER (scrolled), text);
+  vbox = gkrellm_gtk_framed_notebook_page (tabs, _("Info"));
+
+  text = gkrellm_gtk_scrolled_text_view(vbox, NULL,
+                GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+
+  for (i = 0; i < sizeof(kkam_info_text) / sizeof(gchar *); ++i)
+     gkrellm_gtk_text_view_append(text, _(kkam_info_text[i]));
 
   /* About tab */
-  vbox = gkrellm_create_tab (tabs, _("About"));
+  vbox = gkrellm_gtk_framed_notebook_page (tabs, _("About"));
   about = gtk_label_new (kkam_about_text);
   gtk_box_pack_start (GTK_BOX (vbox), about, TRUE, TRUE, 0);
 }
@@ -2047,7 +2018,7 @@ void kkam_cleanup ()
     destroy_sources_list (&panels[i]);
 }
 
-static Monitor kam_mon  =
+static GkrellmMonitor kam_mon  =
 {
   PLUGIN_NAME,         /* Name, for config tab.                    */
   0,                   /* Id,  0 if a plugin                       */
@@ -2069,10 +2040,18 @@ static Monitor kam_mon  =
   NULL                 /* path if a plugin, filled in by GKrellM   */
 };
 
-Monitor *init_plugin ()
+
+#if defined(WIN32)
+    __declspec(dllexport) GkrellmMonitor *
+    gkrellm_init_plugin(win32_plugin_callbacks* calls)
+#else
+    GkrellmMonitor *
+    gkrellm_init_plugin()
+#endif
 {
   int i;
   
+  pGK = gkrellm_ticks();
   style_id = gkrellm_add_meter_style (&kam_mon, PLUGIN_STYLE);
   panels = g_new0 (KKamPanel, MAX_NUMPANELS);
   
